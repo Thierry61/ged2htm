@@ -1,6 +1,6 @@
+use crate::ERRORS;
 use anyhow::anyhow;
 use phf::{phf_map, phf_set};
-use crate::ERRORS;
 
 // Déclaration du Set statique et immuable des régions françaises
 // selon l'ancienne nomenclature d'avant la réforme de 2016 telle qu'utilisée par Geneanet
@@ -530,14 +530,22 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
     if !place_entree.contains(", ") {
         if let Some(prefix) = PREFIXE_PAYS.get(place_entree) {
             // On retourne le prefix correspondant ("en" ou "au")
-            return PlaceParts { prefix, place: place_entree.to_string(), ..Default::default() };
+            return PlaceParts {
+                prefix,
+                place: place_entree.to_string(),
+                ..Default::default()
+            };
         } else {
             // L'élément unique n'est pas un pays => on empile l'erreur et on retourne le lieu tel quel sans prefix
             // mais avec le flag d'erreur positionné pour qu'il soit affiché en rouge
             write_errors!(errors, {
                 errors.insert(place_entree.to_string(), anyhow!("Le lieu est réduit à un seul élément qui n'est pas un pays : '{place_entree}'"))
             });
-            return PlaceParts { error: true, place: place_entree.to_string(), ..Default::default() };
+            return PlaceParts {
+                error: true,
+                place: place_entree.to_string(),
+                ..Default::default()
+            };
         }
     }
     let mut v: Vec<&str> = place_entree.split(", ").collect();
@@ -558,12 +566,23 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
             v.insert(1, second);
         } else {
             write_errors!(errors, {
-                errors.insert(place_entree.to_string(), anyhow!("Structure invalide pour un lieu commençant par '[' : '{place_entree}'"));
+                errors.insert(
+                    place_entree.to_string(),
+                    anyhow!(
+                        "Structure invalide pour un lieu commençant par '[' : '{place_entree}'"
+                    ),
+                );
             });
-            return PlaceParts { error: true, place: place_entree.to_string(), ..Default::default() };
+            return PlaceParts {
+                error: true,
+                place: place_entree.to_string(),
+                ..Default::default()
+            };
         }
     }
-    let v: Vec<&str> = v.into_iter().enumerate()
+    let v: Vec<&str> = v
+        .into_iter()
+        .enumerate()
         // Supprime les codes postaux (ils sont toujours sur 5 chiffres,
         // par exemple Chalencon en Ardèche a pour code postal 07048)
         .filter(|&(_u, x)| x.len() != 5 || !x.chars().all(|c| c.is_ascii_digit()))
@@ -578,7 +597,9 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
                 // Positionne un flag d'erreur quand l'élément courant est une région et que le précédent est un département
                 // mais qu'il n'est pas dans cette région
                 if ANCIENNES_REGIONS_FRANCE.contains(lieu) {
-                    if let Some(&expected_region) = DEPARTEMENT_TO_ANCIENNE_REGION.get(previous_element) {
+                    if let Some(&expected_region) =
+                        DEPARTEMENT_TO_ANCIENNE_REGION.get(previous_element)
+                    {
                         if expected_region != lieu {
                             bad_region = true;
                         }
@@ -586,7 +607,7 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
                 }
             }
             // L'arrondissement est sauté pour la gestion des doublons
-            if !lieu.ends_with ("arrondissement") {
+            if !lieu.ends_with("arrondissement") {
                 previous_element = lieu;
             }
             last_index = u;
@@ -635,17 +656,35 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
         .collect();
     if index_pays != 0 && index_pays != last_index {
         write_errors!(errors, {
-            errors.insert(place_entree.to_string(), anyhow!("Le nom d'un pays doit être en derière position : '{place_entree}'"));
+            errors.insert(
+                place_entree.to_string(),
+                anyhow!("Le nom d'un pays doit être en derière position : '{place_entree}'"),
+            );
         });
-        return PlaceParts { error: true, place: place_entree.to_string(), ..Default::default() };
+        return PlaceParts {
+            error: true,
+            place: place_entree.to_string(),
+            ..Default::default()
+        };
     }
     if bad_region {
         write_errors!(errors, {
-            errors.insert(place_entree.to_string(), anyhow!("Le départment n'appartient pas à la région spécifiée : '{place_entree}"));
+            errors.insert(
+                place_entree.to_string(),
+                anyhow!("Le départment n'appartient pas à la région spécifiée : '{place_entree}"),
+            );
         });
-        return PlaceParts { error: true, place: place_entree.to_string(), ..Default::default() };
+        return PlaceParts {
+            error: true,
+            place: place_entree.to_string(),
+            ..Default::default()
+        };
     }
-    PlaceParts { prefix, place: v.join(", "), ..Default::default() }
+    PlaceParts {
+        prefix,
+        place: v.join(", "),
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
@@ -678,25 +717,54 @@ mod tests {
 
     #[test]
     fn test_villes() {
-        assert_eq!(ok("Casalvieri, Italie"), ("à", "Casalvieri, Italie".to_string()));
-        assert_eq!(ok("Valence, Drôme, Rhône-Alpes, France"), ("à", "Valence, Drôme, Rhône-Alpes".to_string()));
-        assert_eq!(ok("Le Havre, Seine-Maritime, Haute-Normandie, France"), ("au", "Havre, Seine-Maritime, Haute-Normandie".to_string()));
-        assert_eq!(ok("Les Sables-d’Olonne, Vendée, Pays de la Loire"), ("aux", "Sables-d’Olonne, Vendée, Pays de la Loire".to_string()));
-        assert_eq!(ok("La Rochelle, Charente-Maritime, France"), ("à la", "Rochelle, Charente-Maritime".to_string()));
+        assert_eq!(
+            ok("Casalvieri, Italie"),
+            ("à", "Casalvieri, Italie".to_string())
+        );
+        assert_eq!(
+            ok("Valence, Drôme, Rhône-Alpes, France"),
+            ("à", "Valence, Drôme, Rhône-Alpes".to_string())
+        );
+        assert_eq!(
+            ok("Le Havre, Seine-Maritime, Haute-Normandie, France"),
+            ("au", "Havre, Seine-Maritime, Haute-Normandie".to_string())
+        );
+        assert_eq!(
+            ok("Les Sables-d’Olonne, Vendée, Pays de la Loire"),
+            (
+                "aux",
+                "Sables-d’Olonne, Vendée, Pays de la Loire".to_string()
+            )
+        );
+        assert_eq!(
+            ok("La Rochelle, Charente-Maritime, France"),
+            ("à la", "Rochelle, Charente-Maritime".to_string())
+        );
 
         // En toute rigueur on devrait générer "l'Aigle" mais cela apporte trop de complications
-        assert_eq!(ok("L'Aigle, Orne, France"), ("à", "L'Aigle, Orne".to_string()));
+        assert_eq!(
+            ok("L'Aigle, Orne, France"),
+            ("à", "L'Aigle, Orne".to_string())
+        );
 
         // Cas particulier à tester car le caractère UTF-8 É prend 2 octets. Ce test était utile quand les lieux étaient des String
         // et que ce cas utilisait l'instruction format!("l'{}", &lieu[2..])
-        assert_eq!(ok("L'Épine, Vendée, France"), ("à", "L'Épine, Vendée".to_string()));
+        assert_eq!(
+            ok("L'Épine, Vendée, France"),
+            ("à", "L'Épine, Vendée".to_string())
+        );
 
         // Test de Paris à la fois ville et département
-        assert_eq!(ok("[7ème arrondissement] - Paris, 75056, Paris, Ile-de-France, France"), ("à", "Paris, 7ème arrondissement, Ile-de-France".to_string()));
+        assert_eq!(
+            ok("[7ème arrondissement] - Paris, 75056, Paris, Ile-de-France, France"),
+            ("à", "Paris, 7ème arrondissement, Ile-de-France".to_string())
+        );
 
         // Test d'un lieu-dit
-        assert_eq!(ok("[Les Joinas] - Brette, Drôme, Rhône-Alpes, France"), ("aux", "Joinas, Brette, Drôme, Rhône-Alpes".to_string()));
-
+        assert_eq!(
+            ok("[Les Joinas] - Brette, Drôme, Rhône-Alpes, France"),
+            ("aux", "Joinas, Brette, Drôme, Rhône-Alpes".to_string())
+        );
     }
 
     #[test]
@@ -711,14 +779,23 @@ mod tests {
         assert_eq!(ok("Limousin, France"), ("dans le", "Limousin".to_string()));
 
         // Test de départements qui sont aussi des régions
-        assert_eq!(ok("Guadeloupe, Guadeloupe, France"), ("en", "Guadeloupe".to_string()));
+        assert_eq!(
+            ok("Guadeloupe, Guadeloupe, France"),
+            ("en", "Guadeloupe".to_string())
+        );
         assert_eq!(ok("Mayotte, France"), ("à", "Mayotte".to_string()));
-        assert_eq!(ok("La Réunion, La Réunion, France"), ("à", "La Réunion".to_string()));
+        assert_eq!(
+            ok("La Réunion, La Réunion, France"),
+            ("à", "La Réunion".to_string())
+        );
     }
 
     #[test]
     fn test_lieux_invalides() {
-        assert_eq!(err("Vietnamx"), ["Le lieu est réduit à un seul élément qui n'est pas un pays : 'Vietnamx'"]);
+        assert_eq!(
+            err("Vietnamx"),
+            ["Le lieu est réduit à un seul élément qui n'est pas un pays : 'Vietnamx'"]
+        );
         assert_eq!(err("Les Sables-d’Olonne, Vendée, Rhône-Alpes"), ["Le départment n'appartient pas à la région spécifiée : 'Les Sables-d’Olonne, Vendée, Rhône-Alpes"]);
         assert_eq!(err("Valence, Drôme, France, Rhône-Alpes"), ["Le nom d'un pays doit être en derière position : 'Valence, Drôme, France, Rhône-Alpes'"]);
     }

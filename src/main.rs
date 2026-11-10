@@ -1,4 +1,4 @@
-use anyhow::{Result, Error};
+use anyhow::{Error, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use clap::Parser;
 use dioxus::prelude::*;
@@ -7,8 +7,8 @@ use ged_io::Gedcom;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write;
-use std::sync::LazyLock;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 // Gestion du BTreeMap contenant les erreurs détectées (BTreeMap pour garder un ordonnacement par clé)/
 // L'encapsulation par use_context::<Store<...> ne marchant pas en mode test (car le runtime Dioxus n'est pas présent),
@@ -18,26 +18,23 @@ use std::path::PathBuf;
 // RwLock (Read-Write Lock) permet la concurrence : Contrairement à un Mutex classique qui bloque tout le monde dès qu'on y accède, le RwLock offre un excellent compromis :
 // -  Plusieurs threads peuvent lire (.read()) la BTreeMap en même temps sans se bloquer.
 // -  Un seul thread peut écrire (.write()) à la fois, bloquant temporairement les lecteurs pour éviter les corruptions de données (les data races).
-static ERRORS: LazyLock<std::sync::RwLock<BTreeMap<String, Error>>> = LazyLock::new(|| {
-    std::sync::RwLock::new(BTreeMap::new())
-});
+static ERRORS: LazyLock<std::sync::RwLock<BTreeMap<String, Error>>> =
+    LazyLock::new(|| std::sync::RwLock::new(BTreeMap::new()));
 
 // Pour réduire la durée des verrous en écriture il ne faut pas définir la variable mutable errors en début de fonction,
 // mais il faut la définir au plus près de chaque écriture du BTreeMap. Cette macro aide en cela en définissant un scope
 // limité pour le lock nécessaire à l'écriture.
 macro_rules! write_errors {
-    ($errors:ident, $body:expr) => {
-        {
-            let mut $errors = ERRORS.write().unwrap();
-            $body
-        }
-    };
+    ($errors:ident, $body:expr) => {{
+        let mut $errors = ERRORS.write().unwrap();
+        $body
+    }};
 }
 
 // Exports pour les composants
 mod date;
-mod place;
 mod full_name;
+mod place;
 
 // Import des composants
 mod components;
@@ -55,8 +52,8 @@ const TAILWIND_CSS: &str = include_str!("../assets/tailwind.css");
 
 // For binary assets we additionally need to encode them in base64
 static FAVICON: LazyLock<String> = LazyLock::new(|| {
-        let encoded = BASE64_STANDARD.encode(include_bytes!("../assets/smalllogo.png"));
-        format!("data:image/x-icon;base64,{}", encoded)
+    let encoded = BASE64_STANDARD.encode(include_bytes!("../assets/smalllogo.png"));
+    format!("data:image/x-icon;base64,{}", encoded)
 });
 static MALE_PNG: LazyLock<String> = LazyLock::new(|| {
     let encoded = BASE64_STANDARD.encode(include_bytes!("../assets/male.png"));
@@ -94,7 +91,13 @@ struct Args {
 // Composant racine de l'application
 // TODO: pour l'instant l'application ne fait qu'afficher la liste de tous les individus
 #[component]
-fn App(xrefs: Vec<String>, data: GedcomData, input: PathBuf, start_person: String, max_gen: usize) -> Element {
+fn App(
+    xrefs: Vec<String>,
+    data: GedcomData,
+    input: PathBuf,
+    start_person: String,
+    max_gen: usize,
+) -> Element {
     // Context provider pour éviter de passer la structure GEDCOM en paramètre à chaque composant
     let data = use_store(|| data);
     use_context_provider(|| data);
@@ -169,21 +172,32 @@ fn main() -> Result<()> {
 
     // Lecture et extraction des données du fichier GED
     // Grâce à anyhow, on utilise `.context()` pour donner du contexte aux erreurs
-    let source = fs::read_to_string(&args.input)
-            .context(format!("Impossible d'ouvrir le fichier d'entrée : {:?}", args.input))?;
+    let source = fs::read_to_string(&args.input).context(format!(
+        "Impossible d'ouvrir le fichier d'entrée : {:?}",
+        args.input
+    ))?;
 
-    let mut gedcom = Gedcom::new(source.chars())
-        .context(format!("Impossible de charger le fichier d'entrée : {:?}", args.input))?;
+    let mut gedcom = Gedcom::new(source.chars()).context(format!(
+        "Impossible de charger le fichier d'entrée : {:?}",
+        args.input
+    ))?;
 
-    let data = gedcom.parse_data()
-        .context(format!("Impossible d'analyser le fichier d'entrée : {:?}", args.input))?;
+    let data = gedcom.parse_data().context(format!(
+        "Impossible d'analyser le fichier d'entrée : {:?}",
+        args.input
+    ))?;
 
-    println!("Génération du HTML pour {} individus...", data.individuals.len());
+    println!(
+        "Génération du HTML pour {} individus...",
+        data.individuals.len()
+    );
 
     // Liste des xref des individus
     let mut xrefs = Vec::new();
     for individual in &data.individuals {
-        let xref = individual.xref.clone()
+        let xref = individual
+            .xref
+            .clone()
             .context(format!("Xref manquants pour l'individu : {:?}", individual))?;
         xrefs.push(xref);
     }
@@ -200,15 +214,19 @@ fn main() -> Result<()> {
     });
 
     // Création du fichier HTML de sortie
-    let mut file_out = File::create(&args.output)
-        .context(format!("Impossible de créer le fichier de sortie : {:?}", args.output))?;
-    
+    let mut file_out = File::create(&args.output).context(format!(
+        "Impossible de créer le fichier de sortie : {:?}",
+        args.output
+    ))?;
+
     // Ecriture de la clause DOCTYPE pour que la page ne soit pas en mode quirks
-    file_out.write_all(b"<!DOCTYPE html>")
+    file_out
+        .write_all(b"<!DOCTYPE html>")
         .context("Erreur lors de l'écriture de la déclaration DOCTYPE")?;
 
     // Ecriture du reste de la page html
-    file_out.write_all(html_string.as_bytes())
+    file_out
+        .write_all(html_string.as_bytes())
         .context("Erreur lors de l'écriture des données HTML")?;
 
     println!("Fichier HTML généré dans : {:?}", args.output);

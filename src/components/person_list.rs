@@ -1,5 +1,4 @@
-
-use dioxus::{CapturedError, prelude::*};
+use dioxus::{prelude::*, CapturedError};
 
 use super::person::{Individu, IndividuProps};
 

@@ -1,13 +1,12 @@
-
 use dioxus::prelude::*;
 use ged_io::types::individual::family_link::FamilyLinkType;
-use ged_io::types::GedcomData;
 use ged_io::types::individual::gender::{Gender, GenderType};
+use ged_io::types::GedcomData;
 
-use crate::{MALE_PNG, FEMALE_PNG};
 use crate::date::{traduire_date, DateParts};
-use crate::place::{interpreter_lieu, PlaceParts};
 use crate::full_name::{nom_complet, NameParts};
+use crate::place::{interpreter_lieu, PlaceParts};
+use crate::{FEMALE_PNG, MALE_PNG};
 
 // Composant pour afficher la date et le lieu d'un évènement dans un grille 2x2
 // - event: "Né" ou "Décédé"
@@ -23,7 +22,12 @@ use crate::full_name::{nom_complet, NameParts};
 // |                  | lieu préfixé        |
 // ------------------------------------------
 #[component]
-fn DateLieu(event: &'static str, feminine: &'static str, date: DateParts, place_parts: PlaceParts) -> Element {
+fn DateLieu(
+    event: &'static str,
+    feminine: &'static str,
+    date: DateParts,
+    place_parts: PlaceParts,
+) -> Element {
     let date1 = date.date1;
     rsx! {
         if !date1.date.is_empty() || !place_parts.place.is_empty() {
@@ -65,7 +69,7 @@ fn NomComplet(parts: NameParts) -> Element {
         // et le composant est juste effacé.
         return rsx! {
             span { class: "error", {parts.before_or_full} }
-        }
+        };
     }
     rsx! {
         span { {parts.before_or_full} }
@@ -91,13 +95,22 @@ pub fn Individu(xref: String) -> Element {
     let mut death = DateParts::default();
     let mut death_place = PlaceParts::default();
     let moved_xref = xref.clone();
-    let individual = data.find_individual(&moved_xref)
+    let individual = data
+        .find_individual(&moved_xref)
         .context(format!("Xref {} d'un individu non trouvé", moved_xref))?;
-    let full_name = individual.full_name()
-        .context(format!("Nom complet manquant pour l'individu : {:?}", individual))?;
+    let full_name = individual.full_name().context(format!(
+        "Nom complet manquant pour l'individu : {:?}",
+        individual
+    ))?;
     let (feminine, gender_icon) = match individual.sex.as_ref() {
-        Some(Gender { value: GenderType::Male, .. }) => ("", Some(&*MALE_PNG)),
-        Some(Gender { value: GenderType::Female, .. }) => ("e", Some(&*FEMALE_PNG)),
+        Some(Gender {
+            value: GenderType::Male,
+            ..
+        }) => ("", Some(&*MALE_PNG)),
+        Some(Gender {
+            value: GenderType::Female,
+            ..
+        }) => ("e", Some(&*FEMALE_PNG)),
         _ => ("", None),
     };
     // Naissance de l'individu
@@ -138,23 +151,30 @@ pub fn Individu(xref: String) -> Element {
     let families = individual.families();
     for link in families {
         let xref = &link.xref;
-        let family = data.find_family(xref)
+        let family = data
+            .find_family(xref)
             .context(format!("Xref {} d'une famille non trouvé", xref))?;
         if link.family_link_type == FamilyLinkType::Child {
             // Recherche du père
             if let Some(xref) = &family.individual1 {
-                let individual = data.find_individual(xref)
+                let individual = data
+                    .find_individual(xref)
                     .context(format!("Xref {} d'un individu non trouvé", xref))?;
-                father = individual.full_name()
-                    .context(format!("Nom complet manquant pour l'individu : {:?}", individual))?;
+                father = individual.full_name().context(format!(
+                    "Nom complet manquant pour l'individu : {:?}",
+                    individual
+                ))?;
                 father_xref = xref.clone();
             }
             // Recherche de la mère
             if let Some(xref) = &family.individual2 {
-                let individual = data.find_individual(xref)
+                let individual = data
+                    .find_individual(xref)
                     .context(format!("Xref {} d'un individu non trouvé", xref))?;
-                mother = individual.full_name()
-                    .context(format!("Nom complet manquant pour l'individu : {:?}", individual))?;
+                mother = individual.full_name().context(format!(
+                    "Nom complet manquant pour l'individu : {:?}",
+                    individual
+                ))?;
                 mother_xref = xref.clone();
             }
         }

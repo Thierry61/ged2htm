@@ -24,14 +24,18 @@ macro_rules! generer_verif_err {
             // Appel de la fonction testée
             let parts = $f_test(input);
             // Elle doit générer une erreur
-            assert!(parts.error, concat!("Un échec était attendu pour ", $msg_assert, " {}"), input);
+            assert!(
+                parts.error,
+                concat!("Un échec était attendu pour ", $msg_assert, " {}"),
+                input
+            );
             let errors = ERRORS.read().unwrap();
             // Retrouve l'erreur correspondant au test courant
             // (les tests étant lancés en parallèle d'autres threads ont pu ajouter d'autres erreurs)
             let error = errors.get(input).unwrap();
             error.chain().map(|err| err.to_string()).collect()
         }
-    }
+    };
 }
 
 // Macro générant un fonction de test ok

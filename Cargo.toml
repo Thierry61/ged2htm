@@ -1,0 +1,22 @@
+[package]
+name = "ged2htm"
+authors = ["Thierry61 <tfavier61@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.104"
+base64 = "0.23.1"
+clap = { version = "4.6.7", features = ["derive"] }
+dioxus = { version = "0.7.10", features = ["ssr"] }
+dioxus-ssr = "0.7.10"
+ged_io = "0.17.0"
+phf = { version = "0.14.0", features = ["macros"] }
+regex = "1.13.1"
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]

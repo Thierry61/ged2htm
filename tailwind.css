@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@theme {
+  /* Ajoute les classes bg-blue-75, text-blue-75, etc. avec une couleur intermédiaire entre blue-50 et blue-100 */
+  /* Une autre solution serait de mettre la valeur hexadécimale brute:  --color-blue-75: #e7f0ff; */
+  --color-blue-75: color-mix(in srgb, var(--color-blue-50), var(--color-blue-100));
+}

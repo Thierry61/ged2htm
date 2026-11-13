@@ -31,14 +31,14 @@ Options:
 
 ## Exemple d'utilisation en développement
 
-`dx build && cargo run -- -i C:\NonSynchonizedDocuments\Généalogie\input.ged -s "\"Marie\" Eugénie Briançon"`
+`dx build && cargo run -- -i input.ged -s "\"Marie\" Eugénie Briançon"`
 (à noter que le hot reloading ne marche pas)
 
 ## Génération du binaire en mode release
 
 `dx build --release && cargo build --release`
 
-Le binaire généré est invoquable avec `target\release\ged2htm.exe -i C:\NonSynchonizedDocuments\Généalogie\input.ged -s "\"Marie\" Eugénie Briançon"`
+Le binaire généré est invoquable avec `target\release\ged2htm.exe -i input.ged -s "\"Marie\" Eugénie Briançon"`
 
 ## Technologie
 

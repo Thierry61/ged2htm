@@ -34,6 +34,7 @@ macro_rules! write_errors {
 // Exports pour les composants
 mod date;
 mod full_name;
+mod notes;
 mod place;
 
 // Import des composants

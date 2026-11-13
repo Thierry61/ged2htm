@@ -493,12 +493,10 @@ static PREFIXE_DEPARTEMENTS_REGIONS: phf::Map<&'static str, (&'static str, &'sta
     "Rhône-Alpes" => ("en", "Rhône-Alpes"),
 };
 
-// TODO: A faire en fonction du début du lieu lorsqu'il est affiché sans le préfixe :
+// TODO: A faire en fonction du début du lieu si un jour il est affiché sans le préfixe :
 // - Pur une ville/lieu-dit: s'il commence par "L'" alors il ne faut rien faire (par exemple L'Aigle reste inchangé)
 // - Pour un département : s'il commence par "l'" alors il faut supprimer le "l'" (par exemple l'Aube devient Aube)
 // (le type de lieu se distingue par la casse de la lettre (L et l) ou le préfixe ("à" et "dans")
-
-// TODO : Modifier dans geneanet Grau-du-Roi en Le Grau-du-Roi, idem pour Petit-Paris
 
 // Décomposition d'un lieu et de son préfixe
 #[derive(Default, Clone, PartialEq)]
@@ -516,39 +514,45 @@ pub struct PlaceParts {
 /// - Gestion des lieux-dits (par exemple "[Le Moulin] - Saint-Nazaire-le-Désert" => "Le Moulin", "Saint-Nazaire-le-Désert")
 /// - Suppression des codes postaux
 /// - Suppression de "France" si c'est le dernier élément
-/// - Génération d'une erreur si un pays n'est pas en dernier position
+/// - Génération d'une erreur si un pays n'est pas en dernière position
 /// - Vérification de la région quand le département est présent
 /// - Supression des doublons (comme Paris à la fois ville et département, ou les outre-mer à la fois départements et régions)
-/// - Ajout du prefixe sur le premier élément
-pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
+/// - Ajout du préfixe sur le premier élément
+/// - Cas particulier du Petit-Paris (Saint-Nazaire-le-Désert)
+pub fn interpreter_lieu(lieu: &str) -> PlaceParts {
     let mut index_pays = 0usize;
     let mut last_index = 0usize;
     let mut bad_region = false;
     let mut previous_element = "";
     let mut prefix = "à";
     // Court-circuit rapide quand le lieu est réduit à un pays
-    if !place_entree.contains(", ") {
-        if let Some(prefix) = PREFIXE_PAYS.get(place_entree) {
+    if !lieu.contains(", ") {
+        if let Some(prefix) = PREFIXE_PAYS.get(lieu) {
             // On retourne le prefix correspondant ("en" ou "au")
             return PlaceParts {
                 prefix,
-                place: place_entree.to_string(),
+                place: lieu.to_string(),
                 ..Default::default()
             };
         } else {
             // L'élément unique n'est pas un pays => on empile l'erreur et on retourne le lieu tel quel sans prefix
             // mais avec le flag d'erreur positionné pour qu'il soit affiché en rouge
             write_errors!(errors, {
-                errors.insert(place_entree.to_string(), anyhow!("Le lieu est réduit à un seul élément qui n'est pas un pays : '{place_entree}'"))
+                errors.insert(
+                    lieu.to_string(),
+                    anyhow!(
+                        "Le lieu est réduit à un seul élément qui n'est pas un pays : '{lieu}'"
+                    ),
+                )
             });
             return PlaceParts {
                 error: true,
-                place: place_entree.to_string(),
+                place: lieu.to_string(),
                 ..Default::default()
             };
         }
     }
-    let mut v: Vec<&str> = place_entree.split(", ").collect();
+    let mut v: Vec<&str> = lieu.split(", ").collect();
     // Scinde le 1er élément en deux s'il commence par un arrondissemnt ou un lieu-dit
     // Un tel lieu a pour structure: [arrondissement/lieu-dit] - ville
     if v[0].starts_with("[") {
@@ -567,15 +571,13 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
         } else {
             write_errors!(errors, {
                 errors.insert(
-                    place_entree.to_string(),
-                    anyhow!(
-                        "Structure invalide pour un lieu commençant par '[' : '{place_entree}'"
-                    ),
+                    lieu.to_string(),
+                    anyhow!("Structure invalide pour un lieu commençant par '[' : '{lieu}'"),
                 );
             });
             return PlaceParts {
                 error: true,
-                place: place_entree.to_string(),
+                place: lieu.to_string(),
                 ..Default::default()
             };
         }
@@ -583,6 +585,8 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
     let v: Vec<&str> = v
         .into_iter()
         .enumerate()
+        // Suppression des éléments vides
+        .filter(|&(_u, x)| !x.is_empty())
         // Supprime les codes postaux (ils sont toujours sur 5 chiffres,
         // par exemple Chalencon en Ardèche a pour code postal 07048)
         .filter(|&(_u, x)| x.len() != 5 || !x.chars().all(|c| c.is_ascii_digit()))
@@ -649,6 +653,10 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
                     // afficher le lieu sans le préfixe (auquel cas il faudrait remettre le L majuscule).
                     // En outre le fait que le préfixe et le lieu sont stylés de manière différente rend la chose acceptable.
                     return lieu;
+                } else if lieu == "Petit-Paris (Saint-Nazaire-le-Désert)" {
+                    // Cas particulier pour Petit-Paris : on enlève St Nazaire et ajoute le préfixe "au" => au Petit-Paris
+                    prefix = "au";
+                    return &lieu[..11];
                 }
             }
             lieu
@@ -657,26 +665,26 @@ pub fn interpreter_lieu(place_entree: &str) -> PlaceParts {
     if index_pays != 0 && index_pays != last_index {
         write_errors!(errors, {
             errors.insert(
-                place_entree.to_string(),
-                anyhow!("Le nom d'un pays doit être en derière position : '{place_entree}'"),
+                lieu.to_string(),
+                anyhow!("Le nom d'un pays doit être en derière position : '{lieu}'"),
             );
         });
         return PlaceParts {
             error: true,
-            place: place_entree.to_string(),
+            place: lieu.to_string(),
             ..Default::default()
         };
     }
     if bad_region {
         write_errors!(errors, {
             errors.insert(
-                place_entree.to_string(),
-                anyhow!("Le départment n'appartient pas à la région spécifiée : '{place_entree}"),
+                lieu.to_string(),
+                anyhow!("Le départment n'appartient pas à la région spécifiée : '{lieu}"),
             );
         });
         return PlaceParts {
             error: true,
-            place: place_entree.to_string(),
+            place: lieu.to_string(),
             ..Default::default()
         };
     }

@@ -77,13 +77,17 @@ fn traduire_mois(mois_str: &str) -> Result<&'static str> {
 
 /// Parse et traduit une date élémentaire de l'anglais vers le français.
 /// Formats acceptés : "JJ MMM AAAA", "MMM AAAA" ou "AAAA"
-fn traduire_date_simple(date_entree: &str, elements: &[&str]) -> Result<String, anyhow::Error> {
+fn traduire_date_simple(date: &str, elements: &[&str]) -> Result<String, anyhow::Error> {
     match elements {
         // Cas 1 : Jour (1 ou 2 chiffres), Mois (3 lettres), Année (4 chiffres)
         [jour, mois, annee] => {
-            let j = formater_jour(jour).with_context(|| format!("Échec du traitement du jour dans la date '{date_entree}'"))?;
-            let m = traduire_mois(mois).with_context(|| format!("Échec de la traduction du mois dans la date '{date_entree}'"))?;
-            let a = valider_annee(annee).with_context(|| format!("Échec de la validation de l'année dans la date '{date_entree}'"))?;
+            let j = formater_jour(jour)
+                .with_context(|| format!("Échec du traitement du jour dans la date '{date}'"))?;
+            let m = traduire_mois(mois)
+                .with_context(|| format!("Échec de la traduction du mois dans la date '{date}'"))?;
+            let a = valider_annee(annee).with_context(|| {
+                format!("Échec de la validation de l'année dans la date '{date}'")
+            })?;
             // TODO: convertir la date pour vérifier qu'elle est valide (pour exclure des dates comme 29 févr. 2026, 31 avr. 2024, ...)
             // TODO: retourner cette date pour faire des calculs d'âge
             Ok(format!("{} {} {}", j, m, a))
@@ -91,20 +95,25 @@ fn traduire_date_simple(date_entree: &str, elements: &[&str]) -> Result<String, 
 
         // Cas 2 : Mois (3 lettres), Année (4 chiffres) (Le jour est absent)
         [mois, annee] => {
-            let m = traduire_mois(mois).with_context(|| format!("Échec de la traduction du mois dans la date '{date_entree}'"))?;
-            let a = valider_annee(annee).with_context(|| format!("Échec de la validation de l'année dans la date '{date_entree}'"))?;
+            let m = traduire_mois(mois)
+                .with_context(|| format!("Échec de la traduction du mois dans la date '{date}'"))?;
+            let a = valider_annee(annee).with_context(|| {
+                format!("Échec de la validation de l'année dans la date '{date}'")
+            })?;
             Ok(format!("{} {}", m, a))
         }
 
         // Cas 3 : Année seule (4 chiffres) (Le jour et le mois sont absents)
         [annee] => {
-            let a = valider_annee(annee).with_context(|| format!("Échec de la validation de l'année dans la date '{date_entree}'"))?;
+            let a = valider_annee(annee).with_context(|| {
+                format!("Échec de la validation de l'année dans la date '{date}'")
+            })?;
             Ok(a.to_string())
         }
 
         // Format invalide (chaîne vide ou trop d'éléments)
         _ => bail!(
-            "Format de date invalide. Attendu: 'JJ MMM AAAA', 'MMM AAAA' ou 'AAAA'. Reçu: '{date_entree}'"
+            "Format de date invalide. Attendu: 'JJ MMM AAAA', 'MMM AAAA' ou 'AAAA'. Reçu: '{date}'"
         ),
     }
 }
@@ -164,9 +173,9 @@ impl DateParts {
 /// - AFT date : le préfixe retourné est alors "après le" ou "après"
 /// - BET date AND date : le préfixe de la 1ère date est alors "entre le" ou "entre" et celui de la 2ième date "et le" ou "et"
 /// - FROM date TO date : le préfixe de la 1ère date est alors "du" ou "de" et celui de la 2ième date "au" ou "à"
-fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
+fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
     // Découpage par espace en ignorant les espaces multiples potentiels
-    let elements: Vec<&str> = date_entree.split_whitespace().collect();
+    let elements: Vec<&str> = date.split_whitespace().collect();
     let (&first, rest) = elements.split_first().context("Date vide !")?;
     match first {
         // Vers
@@ -174,7 +183,7 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             let prefix = if rest.len() == 3 { "vers le" } else { "vers" };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date_entree, rest)?,
+                traduire_date_simple(date, rest)?,
             ))
         }
         // Peut-être
@@ -186,7 +195,7 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date_entree, rest)?,
+                traduire_date_simple(date, rest)?,
             ))
         }
         // Avant
@@ -194,7 +203,7 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             let prefix = if rest.len() == 3 { "avant le" } else { "avant" };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date_entree, rest)?,
+                traduire_date_simple(date, rest)?,
             ))
         }
         // Après
@@ -206,7 +215,7 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date_entree, rest)?,
+                traduire_date_simple(date, rest)?,
             ))
         }
         // Ce format désigne un événement ponctuel unique qui a eu lieu à une date précise, mais
@@ -217,9 +226,9 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             let mut iter = rest.split(|&k| k == "AND");
             let rest1 = iter
                 .next()
-                .with_context(|| format!("Mot clé AND manquant dans la date '{date_entree}"))?;
+                .with_context(|| format!("Mot clé AND manquant dans la date '{date}"))?;
             if rest1.is_empty() {
-                bail!("Date vide entre BET et AND dans la date '{date_entree}")
+                bail!("Date vide entre BET et AND dans la date '{date}")
             }
             let prefix1 = if rest1.len() == 3 {
                 "entre le"
@@ -229,16 +238,16 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             let rest2 = iter
                 .next()
                 // rest2 est en fait vide quand AND est le dernier élément, mais il faut bien gérer ce cas d'erreur
-                .with_context(|| format!("Date vide après AND dans la date '{date_entree}"))?;
+                .with_context(|| format!("Date vide après AND dans la date '{date}"))?;
             if rest2.is_empty() {
-                bail!("Date vide après AND dans la date '{date_entree}")
+                bail!("Date vide après AND dans la date '{date}")
             }
             let prefix2 = if rest2.len() == 3 { "et le" } else { "et" };
             Ok(DateParts::new_double(
                 prefix1,
-                traduire_date_simple(date_entree, rest1)?,
+                traduire_date_simple(date, rest1)?,
                 prefix2,
-                traduire_date_simple(date_entree, rest2)?,
+                traduire_date_simple(date, rest2)?,
             ))
         }
         // Ce format désigne un événement continu ou répétitif qui s'est déroulé sur toute
@@ -248,46 +257,46 @@ fn traduire_date_avec_err(date_entree: &str) -> Result<DateParts> {
             let mut iter = rest.split(|&k| k == "TO");
             let rest1 = iter
                 .next()
-                .with_context(|| format!("Mot clé TO manquant dans la date '{date_entree}"))?;
+                .with_context(|| format!("Mot clé TO manquant dans la date '{date}"))?;
             if rest1.is_empty() {
-                bail!("Date vide entre FROM et TO dans la date '{date_entree}")
+                bail!("Date vide entre FROM et TO dans la date '{date}")
             }
             let prefix1 = if rest1.len() == 3 { "du" } else { "de" };
             let rest2 = iter
                 .next()
                 // rest2 est en fait vide quand TO est le dernier élément, mais il faut bien gérer ce cas d'erreur
-                .with_context(|| format!("Date vide après TO dans la date '{date_entree}"))?;
+                .with_context(|| format!("Date vide après TO dans la date '{date}"))?;
             if rest2.is_empty() {
-                bail!("Date vide après TO dans la date '{date_entree}")
+                bail!("Date vide après TO dans la date '{date}")
             }
             let prefix2 = if rest2.len() == 3 { "au" } else { "à" };
             Ok(DateParts::new_double(
                 prefix1,
-                traduire_date_simple(date_entree, rest1)?,
+                traduire_date_simple(date, rest1)?,
                 prefix2,
-                traduire_date_simple(date_entree, rest2)?,
+                traduire_date_simple(date, rest2)?,
             ))
         }
         _ => {
             let prefix = if elements.len() == 3 { "le" } else { "en" };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date_entree, &elements)?,
+                traduire_date_simple(date, &elements)?,
             ))
         }
     }
 }
 
-pub fn traduire_date(date_entree: &str) -> DateParts {
-    match traduire_date_avec_err(date_entree) {
+pub fn traduire_date(date: &str) -> DateParts {
+    match traduire_date_avec_err(date) {
         Ok(parts) => parts,
         Err(err) => {
             // On enregistre l'erreur
             write_errors!(errors, {
-                errors.insert(date_entree.to_string(), err);
+                errors.insert(date.to_string(), err);
             });
             // On retourne la date brute d'origine sans préfixe
-            let mut ret = DateParts::new_simple("", date_entree.to_string());
+            let mut ret = DateParts::new_simple("", date.to_string());
             // On positionne le flag d'erreur pour qu'elle soit affichée en rouge.
             ret.error = true;
             ret

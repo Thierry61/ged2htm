@@ -1,6 +1,29 @@
 use crate::ERRORS;
 use anyhow::anyhow;
 
+// Dans Geneanet, quand le prénom usuel d'un individu n'est pas le premier prénom
+// de la liste de ses prénoms officiels il est recommandé de saisir le prénom usuel
+// dans le champ "Prénoms" et la liste des prénoms officiels dans le champ "Prénom alias".
+// Ca marche dans l'export GEDCOM (le nom complet (champ NAME) contient la liste de
+// tous les prénoms avec le prénom usuel mis en entre guillemets) sauf quand le prénom
+// usuel ne fait pas partie de la liste des prénoms officiels (l'export ne contient
+// alors que le prénom usuel et a perdu les prénoms officiels).
+// Il y a 2 moyens de contourner ce problème. Dans les 2 cas il faut saisir la liste des
+// prénoms officiels dans le champ "Prénoms" et ensuite saisir uniquement le prénom usuel
+// (sans le nom de famille) :
+// - soit dans le champ "Sobriquet" (conçu par défaut pour un surnom ou prénom d'usage isolé,
+//   sans le patronyme). Ce sobriquet se retrouve alors proprement sous le tag 2 NICK.
+//   L'inconvénient est uniquement esthétique : le prénom usuel apparaît dans Geneanet en
+//   plus des prénoms officiels et après le nom de surcroît.
+// - soit dans le champ "Nom public" (sans y mettre le nom, sinon il est dédoublé dans
+//   Geneanet). Visuellement la représentation de l'individu est celle attendue et le prénom
+//   usuel apparaît dans l'export sous le tag 2 GIVN. L'inconvénient est que le nom public
+//   est normalement censé remplacer l'intégralité de l'affichage "Prénom Nom" (comme Molière
+//   ou Sœur Emmanuelle) et cette solution présente des risques concernant les recherches
+//   Geneanet et la compatibilité standard du fichier GEDCOM.
+// TODO: Réfléchir si un de ces contournement vaut la peine sachant que de mémoire je n'ai
+// que 2 cas (Raymond Favier et Augustine Favier)
+
 // Décompose le nom complet en isolant le prénom d'usage
 // Le but est de pouvoir le mettre en évidence en le surlignant
 #[derive(Default, Clone, PartialEq)]

@@ -23,7 +23,7 @@ pub fn ListeIndividus(xrefs: Vec<String>) -> Element {
             // Le problème est contourné en appelant le composant directement en Rust
             // et en effectuant un match sur la valeur de retour.
             for xref in xrefs {
-                li { class: "my-5 py-3 px-2 w-90 border-2 rounded-lg shadow-lg border-blue-200 break-inside-avoid",
+                li { class: "my-5 py-1.5 px-2 w-120 border-2 rounded-lg shadow-lg border-blue-200 break-inside-avoid",
                     match Individu(IndividuProps {
                         xref: xref.clone(),
                     }) {

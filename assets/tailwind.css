@@ -15,8 +15,11 @@
     --color-blue-50: oklch(97% 0.014 254.604);
     --color-blue-100: oklch(93.2% 0.032 255.585);
     --color-blue-200: oklch(88.2% 0.059 254.128);
+    --color-blue-300: oklch(80.9% 0.105 251.813);
+    --color-blue-400: oklch(70.7% 0.165 254.624);
     --color-blue-500: oklch(62.3% 0.214 259.815);
     --color-gray-400: oklch(70.7% 0.022 261.325);
+    --color-gray-600: oklch(44.6% 0.03 256.802);
     --color-stone-50: oklch(98.5% 0.001 106.423);
     --color-white: #fff;
     --spacing: 0.25rem;
@@ -186,9 +189,6 @@
   .static {
     position: static;
   }
-  .row-span-2 {
-    grid-row: span 2 / span 2;
-  }
   .container {
     width: 100%;
     @media (width >= 40rem) {
@@ -243,17 +243,14 @@
   .block {
     display: block;
   }
-  .grid {
-    display: grid;
-  }
   .inline {
     display: inline;
   }
   .table {
     display: table;
   }
-  .w-90 {
-    width: calc(var(--spacing) * 90);
+  .w-120 {
+    width: calc(var(--spacing) * 120);
   }
   .max-w-200 {
     max-width: calc(var(--spacing) * 200);
@@ -266,18 +263,6 @@
   }
   .break-inside-avoid {
     break-inside: avoid;
-  }
-  .grid-flow-col {
-    grid-auto-flow: column;
-  }
-  .grid-rows-\[auto_auto\] {
-    grid-template-rows: auto auto;
-  }
-  .justify-start {
-    justify-content: flex-start;
-  }
-  .gap-x-1 {
-    column-gap: calc(var(--spacing) * 1);
   }
   .rounded-lg {
     border-radius: var(--radius-lg);
@@ -296,6 +281,9 @@
   }
   .border-blue-200 {
     border-color: var(--color-blue-200);
+  }
+  .border-blue-300 {
+    border-color: var(--color-blue-300);
   }
   .border-blue-500 {
     border-color: var(--color-blue-500);
@@ -327,14 +315,17 @@
   .px-2 {
     padding-inline: calc(var(--spacing) * 2);
   }
-  .py-3 {
-    padding-block: calc(var(--spacing) * 3);
+  .py-1\.5 {
+    padding-block: calc(var(--spacing) * 1.5);
   }
   .pb-0\.5 {
     padding-bottom: calc(var(--spacing) * 0.5);
   }
   .pb-2\.5 {
     padding-bottom: calc(var(--spacing) * 2.5);
+  }
+  .pl-1 {
+    padding-left: calc(var(--spacing) * 1);
   }
   .align-baseline {
     vertical-align: baseline;
@@ -356,6 +347,9 @@
   }
   .text-gray-400 {
     color: var(--color-gray-400);
+  }
+  .text-gray-600 {
+    color: var(--color-gray-600);
   }
   .text-green-700 {
     color: var(--color-green-700);

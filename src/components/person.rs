@@ -5,57 +5,64 @@ use ged_io::types::GedcomData;
 
 use crate::date::{traduire_date, DateParts};
 use crate::full_name::{nom_complet, NameParts};
+use crate::notes::concat_notes;
 use crate::place::{interpreter_lieu, PlaceParts};
 use crate::{FEMALE_PNG, MALE_PNG};
 
-// Composant pour afficher la date et le lieu d'un évènement dans un grille 2x2
+// Composant pour afficher des notes
+#[component]
+fn Notes(notes: Vec<String>) -> Element {
+    rsx! {
+        div {
+            for note in notes {
+                div {
+                    class: "mb-1 border-l-2 border-blue-300 pl-1 text-gray-600",
+                    dangerous_inner_html: note,
+                }
+            }
+        }
+    }
+}
+
+// Composant pour afficher la date et le lieu d'un évènement
 // - event: "Né" ou "Décédé"
 // - feminine: "" ou "e"
 // - date: les éléments de la date avec leurs préfixes (le, en, vers, ...)
 // - place: le lieu de l'événement avec son préfixe
-// Nota: Les tuples date et place commencent par un booléen indiquant s'ils sont entachés d'une erreur
-// auquel cas ils sont affiché en rouge
-// La grille générée est la suivante :
-// ------------------------------------------
-// | event + feminine | date(s) préfixée(s) |
-// -------------------| --------------------|
-// |                  | lieu préfixé        |
-// ------------------------------------------
+// - notes: les notes associés à cet événement
 #[component]
 fn DateLieu(
     event: &'static str,
     feminine: &'static str,
     date: DateParts,
     place_parts: PlaceParts,
+    notes: Vec<String>,
 ) -> Element {
     let date1 = date.date1;
     rsx! {
         if !date1.date.is_empty() || !place_parts.place.is_empty() {
-            div { class: "grid grid-flow-col grid-rows-[auto_auto] justify-start gap-x-1",
-                div { class: "row-span-2 italic text-gray-400", "{event}{feminine}" }
-                div {
-                    if !date1.date.is_empty() {
-                        // Préfixe de la date
-                        span { class: "italic text-gray-400", "{date1.prefix} " }
-                        // Date (en rouge s'il y a eu une erreur)
-                        span { class: if date.error { "error" }, {date1.date} }
-                        // Deuxième date (avec son propre préfixe) pour une date composée (BET ou FROM)
-                        if let Some(date2) = date.opt_date2 {
-                            span { class: "italic text-gray-400", " {date2.prefix} " }
-                            {date2.date}
-                        }
+            div { class: "mb-1",
+                span { class: "italic text-gray-400", "{event}{feminine} " }
+                if !date1.date.is_empty() {
+                    // Préfixe de la date
+                    span { class: "italic text-gray-400", "{date1.prefix} " }
+                    // Date (en rouge s'il y a eu une erreur)
+                    span { class: if date.error { "error" }, "{date1.date} " }
+                    // Deuxième date (avec son propre préfixe) pour une date composée (BET ou FROM)
+                    if let Some(date2) = date.opt_date2 {
+                        span { class: "italic text-gray-400", " {date2.prefix} " }
+                        {date2.date}
                     }
                 }
-                div {
-                    if !place_parts.place.is_empty() {
-                        // Préfixe du lieu
-                        span { class: "italic text-gray-400", "{place_parts.prefix} " }
-                        // Lieu (en rouge s'il y a eu une erreur)
-                        span { class: if place_parts.error { "error" }, {place_parts.place} }
-                    }
+                if !place_parts.place.is_empty() {
+                    // Préfixe du lieu
+                    span { class: "italic text-gray-400", "{place_parts.prefix} " }
+                    // Lieu (en rouge s'il y a eu une erreur)
+                    span { class: if place_parts.error { "error" }, {place_parts.place} }
                 }
             }
         }
+        Notes { notes }
     }
 }
 
@@ -81,6 +88,23 @@ fn NomComplet(parts: NameParts) -> Element {
     }
 }
 
+// Affichage du nom  complet du père ou de la mère
+#[component]
+fn Parent(parts: NameParts, parent: &'static str, xref: String) -> Element {
+    rsx! {
+        if !parts.before_or_full.is_empty() {
+            div { class: "mb-1",
+                span { class: "italic text-gray-400", "{parent} : " }
+                a {
+                    class: "hover:underline hover:decoration-dotted rounded-lg",
+                    href: "#{xref}",
+                    NomComplet { parts }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 // Composant pour afficher un individu
 pub fn Individu(xref: String) -> Element {
@@ -92,12 +116,15 @@ pub fn Individu(xref: String) -> Element {
     let mut mother_xref = String::new();
     let mut birth = DateParts::default();
     let mut birth_place = PlaceParts::default();
+    let mut birth_notes = Vec::new();
     let mut death = DateParts::default();
     let mut death_place = PlaceParts::default();
+    let mut death_notes = Vec::new();
     let moved_xref = xref.clone();
     let individual = data
         .find_individual(&moved_xref)
         .context(format!("Xref {} d'un individu non trouvé", moved_xref))?;
+    let notes = concat_notes(&individual.notes);
     let full_name = individual.full_name().context(format!(
         "Nom complet manquant pour l'individu : {:?}",
         individual
@@ -119,6 +146,7 @@ pub fn Individu(xref: String) -> Element {
             if let Some(value) = date.value.as_ref() {
                 if !value.is_empty() {
                     birth = traduire_date(value);
+                    birth_notes = concat_notes(&details.notes);
                 }
             }
         }
@@ -136,6 +164,7 @@ pub fn Individu(xref: String) -> Element {
             if let Some(value) = date.value.as_ref() {
                 if !value.is_empty() {
                     death = traduire_date(value);
+                    death_notes = concat_notes(&details.notes);
                 }
             }
         }
@@ -193,34 +222,23 @@ pub fn Individu(xref: String) -> Element {
                     NomComplet { parts: full_name }
                 }
             }
+            Notes { notes }
             DateLieu {
                 event: "Né",
                 feminine,
                 date: birth,
                 place_parts: birth_place,
+                notes: birth_notes,
             }
             DateLieu {
                 event: "Décédé",
                 feminine,
                 date: death,
                 place_parts: death_place,
+                notes: death_notes,
             }
-            div {
-                span { class: "italic text-gray-400", "Père : " }
-                a {
-                    class: "hover:underline hover:decoration-dotted rounded-lg",
-                    href: "#{father_xref}",
-                    NomComplet { parts: father }
-                }
-            }
-            div {
-                span { class: "italic text-gray-400", "Mère : " }
-                a {
-                    class: "hover:underline hover:decoration-dotted rounded-lg",
-                    href: "#{mother_xref}",
-                    NomComplet { parts: mother }
-                }
-            }
+            Parent { parts: father, parent: "Père", xref: father_xref }
+            Parent { parts: mother, parent: "Mère", xref: mother_xref }
         }
     }
 }

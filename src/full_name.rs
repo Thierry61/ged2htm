@@ -1,48 +1,68 @@
 use crate::ERRORS;
 use anyhow::anyhow;
 
-// Dans Geneanet, quand le prénom usuel d'un individu n'est pas le premier prénom
-// de la liste de ses prénoms officiels il est recommandé de saisir le prénom usuel
-// dans le champ "Prénoms" et la liste des prénoms officiels dans le champ "Prénom alias".
-// Ca marche dans l'export GEDCOM (le nom complet (champ NAME) contient la liste de
-// tous les prénoms avec le prénom usuel mis en entre guillemets) sauf quand le prénom
-// usuel ne fait pas partie de la liste des prénoms officiels (l'export ne contient
-// alors que le prénom usuel et a perdu les prénoms officiels).
-// Il y a 2 moyens de contourner ce problème. Dans les 2 cas il faut saisir la liste des
-// prénoms officiels dans le champ "Prénoms" et ensuite saisir uniquement le prénom usuel
-// (sans le nom de famille) :
-// - soit dans le champ "Sobriquet" (conçu par défaut pour un surnom ou prénom d'usage isolé,
-//   sans le patronyme). Ce sobriquet se retrouve alors proprement sous le tag 2 NICK.
-//   L'inconvénient est uniquement esthétique : le prénom usuel apparaît dans Geneanet en
-//   plus des prénoms officiels et après le nom de surcroît.
-// - soit dans le champ "Nom public" (sans y mettre le nom, sinon il est dédoublé dans
-//   Geneanet). Visuellement la représentation de l'individu est celle attendue et le prénom
-//   usuel apparaît dans l'export sous le tag 2 GIVN. L'inconvénient est que le nom public
-//   est normalement censé remplacer l'intégralité de l'affichage "Prénom Nom" (comme Molière
-//   ou Sœur Emmanuelle) et cette solution présente des risques concernant les recherches
-//   Geneanet et la compatibilité standard du fichier GEDCOM.
-// TODO: Réfléchir si un de ces contournement vaut la peine sachant que de mémoire je n'ai
-// que 2 cas (Raymond Favier et Augustine Favier)
+// Dans Geneanet, lorsque le prénom usuel d'un individu est dans la liste
+// de ses prénoms officiels, une solution pour le désigner consiste à saisir
+// le prénom usuel dans le champ "Prénoms" et les prénoms officiels dans
+// le champ "Prénom alias".
+//
+// Cette représentation est correctement restituée dans l'export GEDCOM lorsque
+// le prénom usuel fait partie des prénoms officiels : le champ NAME contient
+// alors tous les prénoms, avec le prénom usuel entre guillemets.
+//
+// En revanche, lorsque le prénom usuel ne fait pas partie des prénoms officiels,
+// l'export observé ne conserve dans NAME que le prénom usuel et perd donc les
+// prénoms officiels.
+//
+// Pour éviter cette perte, il faut conserver la liste des prénoms officiels dans
+// le champ "Prénoms" et enregistrer séparément le prénom usuel.
+//
+// Deux contournements sont possibles :
+//
+// - utiliser le champ "Sobriquet" pour le seul prénom usuel. Celui-ci est exporté
+//   sous le tag NICK, ce qui permet de distinguer proprement les prénoms officiels
+//   du prénom d'usage. En contrepartie, l'affichage dans Geneanet est moins naturel
+//   et, d'après mes tests, le prénom usuel n'apparaît pas dans l'index général
+//   des individus.
+//
+// - utiliser le champ "Nom public" pour le seul prénom usuel. L'affichage dans
+//   Geneanet correspond alors davantage au résultat recherché et le prénom usuel
+//   est exporté sous GIVN. Cependant, "Nom public" est normalement destiné à une
+//   appellation publique remplaçant l'ensemble "Prénom Nom" (Bourvil, Molière,
+//   Sœur Emmanuelle, etc.). Son utilisation pour un simple prénom d'usage détourne
+//   donc la fonction du champ et rend le GEDCOM plus dépendant du comportement
+//   particulier de Geneanet.
+//
+// => Choix du champ "Sobriquet" : malgré un affichage moins satisfaisant dans
+//    Geneanet, il offre le meilleur compromis entre conservation de l'information,
+//    distinction entre prénoms officiels et prénom usuel, et portabilité GEDCOM.
 
-// Décompose le nom complet en isolant le prénom d'usage
-// Le but est de pouvoir le mettre en évidence en le surlignant
+// Décompose le nom complet en isolant un prénom d'usage inclus dans la liste des
+// prénoms offciels de l'état civil.
+// Lorsque celui-ci n'y est pas inclus il est alors stocké dans le champ nick.
 #[derive(Default, Clone, PartialEq)]
 pub struct NameParts {
     // Indique si une erreur a été rencontrée et donc si le nom doit être affiché en rouge
     pub error: bool,
     // Partie avant le prénom usuel ou nom complet quand il n'y en a pas
     pub before_or_full: String,
-    // Prénom usuel et reste du nom,
+    // Prénom usuel (affiché en souligné) et reste du nom,
     // None quand il n'y a pas de prénom usuel
     pub preferred_and_rest: Option<(String, String)>,
+    // Prénom usuel quand il ne fait pas partie de la liste des prénoms officiels
+    // Il est affiché après le nom en italique-souligné
+    pub nick: Option<String>,
 }
 
-pub fn nom_complet(full_name: &str) -> NameParts {
+pub fn nom_complet(full_name_and_nick_name: (&str, Option<&str>)) -> NameParts {
+    let full_name = full_name_and_nick_name.0;
+    let nick = full_name_and_nick_name.1.map(|n| n.to_string());
     let parts: Vec<&str> = full_name.split('"').collect();
     match parts.len() {
         1 => NameParts {
             // Il n'y a pas de prénom usuel => on met le nom complet dans le champ before_or_full
             before_or_full: full_name.to_string(),
+            nick,
             ..Default::default()
         },
         3 => NameParts {
@@ -50,6 +70,7 @@ pub fn nom_complet(full_name: &str) -> NameParts {
             error: false,
             before_or_full: parts[0].to_string(),
             preferred_and_rest: Some((parts[1].to_string(), parts[2].to_string())),
+            nick,
         },
         _ => {
             // Le nombre de " est différent de 0 et 2 => on ne peut pas isoler le prénom d'usage
@@ -65,6 +86,7 @@ pub fn nom_complet(full_name: &str) -> NameParts {
                 // On met le nom complet dans le champ before_or_full et on positionne le flag d'erreur pour qu'il soit affiché en rouge
                 error: true,
                 before_or_full: full_name.to_string(),
+                nick,
                 ..Default::default()
             }
         }
@@ -75,15 +97,21 @@ pub fn nom_complet(full_name: &str) -> NameParts {
 mod tests {
     use super::*;
 
+    // Fonction intermédiaire avec un seul argument d'entrée permettant les tests ok et err
+    // (on ne teste que le cas prénom usuel inclus dans la liste des prénoms officiels)
+    fn nom_complet_sans_surnom(full_name: &str) -> NameParts {
+        nom_complet((full_name, None))
+    }
+
     // Les fonctions ok et err étant similaires entre les modules testés
     // on utilise des macros définies dans test_helpers.rs pour les générer
     crate::generer_verif_err!(
-        fonction_test: nom_complet,
+        fonction_test: nom_complet_sans_surnom,
         chaine_assert: "le nom",
     );
 
     crate::generer_verif_ok!(
-        fonction_test: nom_complet,
+        fonction_test: nom_complet_sans_surnom,
         chaine_assert: "le nom",
         types_retour: (String, Option<(String, String)>),
         extracteur: |p: NameParts| (

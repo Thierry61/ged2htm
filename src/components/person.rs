@@ -85,6 +85,14 @@ fn NomComplet(parts: NameParts) -> Element {
             span { class: "underline", {preferred} }
             span { {rest} }
         }
+        if let Some(nick) = parts.nick {
+            // Surnom
+            span {
+                " ("
+                span { class: "italic underline", {nick} }
+                ")"
+            }
+        }
     }
 }
 
@@ -111,8 +119,10 @@ pub fn Individu(xref: String) -> Element {
     let data = use_context::<Store<GedcomData>>();
     let data = data.read();
     let mut father = String::new();
+    let mut father_nick = None;
     let mut father_xref = String::new();
     let mut mother = String::new();
+    let mut mother_nick = None;
     let mut mother_xref = String::new();
     let mut birth = DateParts::default();
     let mut birth_place = PlaceParts::default();
@@ -129,6 +139,7 @@ pub fn Individu(xref: String) -> Element {
         "Nom complet manquant pour l'individu : {:?}",
         individual
     ))?;
+    let nick_name = individual.names.first().and_then(|n| n.nickname.as_deref());
     let (feminine, gender_icon) = match individual.sex.as_ref() {
         Some(Gender {
             value: GenderType::Male,
@@ -193,6 +204,7 @@ pub fn Individu(xref: String) -> Element {
                     "Nom complet manquant pour l'individu : {:?}",
                     individual
                 ))?;
+                father_nick = individual.names.first().and_then(|n| n.nickname.as_deref());
                 father_xref = xref.clone();
             }
             // Recherche de la mère
@@ -204,14 +216,15 @@ pub fn Individu(xref: String) -> Element {
                     "Nom complet manquant pour l'individu : {:?}",
                     individual
                 ))?;
+                mother_nick = individual.names.first().and_then(|n| n.nickname.as_deref());
                 mother_xref = xref.clone();
             }
         }
     }
     // Décomposition des noms complets en séparant le prénom usuel
-    let full_name = nom_complet(&full_name);
-    let father = nom_complet(&father);
-    let mother = nom_complet(&mother);
+    let full_name = nom_complet((&full_name, nick_name));
+    let father = nom_complet((&father, father_nick));
+    let mother = nom_complet((&mother, mother_nick));
     rsx! {
         div { id: xref,
             div { class: "mb-1",

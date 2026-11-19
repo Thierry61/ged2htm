@@ -89,7 +89,7 @@ fn traduire_date_simple(date: &str, elements: &[&str]) -> Result<String, anyhow:
                 format!("Échec de la validation de l'année dans la date '{date}'")
             })?;
             // TODO: convertir la date pour vérifier qu'elle est valide (pour exclure des dates comme 29 févr. 2026, 31 avr. 2024, ...)
-            // TODO: retourner cette date pour faire des calculs d'âge
+            // TODO: retourner cette date pour faire des calculs d'âge ou d'ordonnancement d'événements
             Ok(format!("{} {} {}", j, m, a))
         }
 

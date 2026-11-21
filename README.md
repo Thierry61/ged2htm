@@ -1,12 +1,18 @@
 # Génération d'un fichier HTML à partir d'un fichier GEDCOM.
 
-C'est un programme permettant de générer l'arbre d'ascendance d'un
+C'est un programme permettant de générer le livre d'ascendance d'un
 individu dont le nom complet est passé en paramètre. Le résultat
-s'inspire de l'arbre d'ascendance généré par Généanet à la différence
+s'inspire du livre d'ascendance généré par Généanet à la différence
 que les ascendants sont regroupés par couple. Le but est de supprimer
 les redondances des lignes de vie des époux.
 
-ATTENTION, POUR LE MOMENT LE PROGRAMME NE FAIT PAS CELA ET GENERE SIMPLEMENT LA LISTE DE TOUS LES INDIVIDUS
+De manière plus générale le programme offre les fonctions suivantes :
+- livre d'ascendance (option `book -a -s <start>`)
+- livre de descendance (option `book -d -s <start>`)
+- liste de tous les individus (option `all -i`)
+- liste de toutes les familles (option `all -f`)
+
+ATTENTION, POUR LE MOMENT SEULE LA LISTE DE TOUS LES INDIVIDUS A ETE IMPLEMENTEE
 
 ## Mode d'emploi
 
@@ -18,27 +24,25 @@ cocher "Mon arbre en ligne" et sélectionner le format GEDCOM (*.ged) et enfin c
 Le fichier exporté doit être ensuite passé en paramètre au progamme selon la syntaxe :
 
 ```
-Usage: ged2htm.exe [OPTIONS] --input <INPUT> --start-name <START_NAME>
+Usage: ged2htm.exe --input <INPUT> book [OPTIONS] --start <START> <--ascending|--descending>
 
 Options:
-  -i, --input <INPUT>              Chemin vers le fichier GED d'entrée
-  -o, --output <OUTPUT>            Chemin du fichier HTML de sortie [default: output.html]
-  -s, --start-name <START_NAME>    Nom de départ exact (ex: "\"Marie\" Eugénie Briançon")
-  -g, --generations <GENERATIONS>  Nombre de générations à extraire (1 = individu seul, 2 = parents, etc.) [default: 1]
+  -s, --start <START>              Nom de départ exact (ex: "\"Marie\" Eugénie Briançon")
+  -g, --generations <GENERATIONS>  Nombre de générations à extraire (1 = individu seul, 2 = avec parents ou enfants, etc.) [default: 1]
+  -a, --ascending                  Génère le livre d'ascendance
+  -d, --descending                 Génère le livre de descendance
   -h, --help                       Print help
-  -V, --version                    Print version
-  ```
+```
 
 ## Exemple d'utilisation en développement
 
-`dx build && cargo run -- -i input.ged -s "\"Marie\" Eugénie Briançon"`
-(à noter que le hot reloading ne marche pas)
+`dx build && cargo run -- -i input.ged book -a -s "\"Marie\" Eugénie Briançon"`
 
 ## Génération du binaire en mode release
 
 `dx build --release && cargo build --release`
 
-Le binaire généré est invoquable avec `target\release\ged2htm.exe -i input.ged -s "\"Marie\" Eugénie Briançon"`
+Le binaire généré est ensuite invoquable avec `target\release\ged2htm.exe -i input.ged book -a -s "\"Marie\" Eugénie Briançon"`
 
 ## Technologie
 
@@ -51,3 +55,4 @@ Ceci apporte quelques contraintes :
 - le hot reloading n'est pas fonctionnel
 - les assets ne sont pas gérés par le pipeline Dioxus
 - le composant ErrorBoundary est défaillant
+- il n'y a aucune interactivité

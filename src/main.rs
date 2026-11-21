@@ -1,6 +1,6 @@
 use anyhow::{Error, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
-use clap::Parser;
+use clap::{ArgGroup, Parser, Subcommand};
 use dioxus::prelude::*;
 use ged_io::types::GedcomData;
 use ged_io::Gedcom;
@@ -41,6 +41,10 @@ mod place;
 mod components;
 use components::person_list::{ListeIndividus, ListeIndividusProps};
 
+// Autres imports
+mod shell_quote;
+use shell_quote::command_line;
+
 #[cfg(test)]
 mod test_helpers;
 
@@ -65,7 +69,7 @@ static FEMALE_PNG: LazyLock<String> = LazyLock::new(|| {
     format!("data:image/png;base64,{}", encoded)
 });
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, PartialEq)]
 #[command(
     author,
     version,
@@ -80,34 +84,125 @@ struct Args {
     #[arg(short, long, default_value = "output.html")]
     output: PathBuf,
 
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+enum Command {
+    /// Génère un livre généalogique
+    Book(BookArgs),
+
+    /// Liste tous les individus ou toutes les familles
+    All(AllArgs),
+}
+
+#[derive(clap::Args, Debug, Clone, PartialEq)]
+#[command(group(
+    ArgGroup::new("direction")
+        .required(true)
+        .args(["ascending", "descending"])
+))]
+struct BookArgs {
     /// Nom de départ exact (ex: "\"Marie\" Eugénie Briançon")
     #[arg(short, long)]
-    start_name: String,
+    start: String,
 
-    /// Nombre de générations à extraire (1 = individu seul, 2 = parents, etc.)
+    /// Nombre de générations à extraire (1 = individu seul, 2 = avec parents ou enfants, etc.)
     #[arg(short, long, default_value_t = 1)]
     generations: usize,
+
+    /// Génère le livre d'ascendance
+    #[arg(short, long)]
+    ascending: bool,
+
+    /// Génère le livre de descendance
+    #[arg(short, long)]
+    descending: bool,
+}
+
+#[derive(clap::Args, Debug, Clone, PartialEq)]
+#[command(group(
+    ArgGroup::new("kind")
+        .required(true)
+        .args(["individuals", "families"])
+))]
+struct AllArgs {
+    /// Liste tous les individus
+    #[arg(short, long)]
+    individuals: bool,
+
+    /// Liste toutes les familles
+    #[arg(short, long)]
+    families: bool,
 }
 
 // Composant racine de l'application
 // TODO: pour l'instant l'application ne fait qu'afficher la liste de tous les individus
 #[component]
-fn App(
-    xrefs: Vec<String>,
-    data: GedcomData,
-    input: PathBuf,
-    start_person: String,
-    max_gen: usize,
-) -> Element {
+fn App(args: Args, data: GedcomData) -> Element {
     // Context provider pour éviter de passer la structure GEDCOM en paramètre à chaque composant
     let data = use_store(|| data);
     use_context_provider(|| data);
-    let individuals_len = xrefs.len();
-    // Précalcul de la liste des individus pour générer au préalable la liste des erreurs.
-    // Ceci permet d'afficher la liste des erreurs AVANT la liste des individus.
-    let liste_individus = ListeIndividus(ListeIndividusProps {
-        xrefs: xrefs.clone(),
-    });
+
+    // Entités affichées (individus ou familles)
+    let entity = match args.command {
+        Command::All(ref all) if all.individuals => "d'individus affichés",
+        _ => "de familles affichées",
+    };
+
+    // Précalcul du composant constituant le contenu de la page
+    // (dépendant de la commande et de ses arguments)
+    // Ceci permet d'afficher la liste des erreurs AVANT le contenu.
+    let (title, nb, contents): (String, usize, Element) = match args.command {
+        Command::Book(book) => {
+            if book.ascending {
+                (
+                    format!("Livre d'ascendance de {}", book.start),
+                    0,
+                    rsx! {
+                        div { class: "mt-4", "TODO: livre ascendant à développer" }
+                    },
+                )
+            } else {
+                (
+                    format!("Livre de descendance de {}", book.start),
+                    0,
+                    rsx! {
+                        div { class: "mt-4", "TODO: livre descendant à développer" }
+                    },
+                )
+            }
+        }
+        Command::All(all) => {
+            if all.individuals {
+                let xrefs = data
+                    .read()
+                    .individuals
+                    .iter()
+                    .map(|individual| {
+                        individual.xref.clone().with_context(|| {
+                            format!("Xref manquant pour l'individu : {:?}", individual)
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                (
+                    "Liste de tous les individus".to_string(),
+                    xrefs.len(),
+                    ListeIndividus(ListeIndividusProps { xrefs }),
+                )
+            } else {
+                (
+                    "Liste de toutes les familles".to_string(),
+                    0,
+                    rsx! {
+                        div { class: "mt-4", "TODO: Liste de toutes les familles à développer" }
+                    },
+                )
+            }
+        }
+    };
+
     rsx! {
         link { rel: "icon shortcut", r#type: "image/x-icon", href: &*FAVICON }
         style { "{TAILWIND_CSS}" }
@@ -124,20 +219,20 @@ fn App(
                     h1 { class: "pb-2.5", "Rapport d'extraction GEDCOM" }
                     div { class: "border-l-2 border-l-solid border-blue-500 bg-blue-75 rounded-r-lg p-4 mb-5",
                         p {
-                            strong { "Fichier GED : " }
-                            "{input.display()}"
+                            strong { "Fichier GED d'entrée : " }
+                            "{args.input.display()}"
                         }
                         p {
-                            strong { "Personne cible : " }
-                            {start_person}
+                            strong { "Fichier HTML de sortie : " }
+                            "{args.output.display()}"
                         }
                         p {
-                            strong { "Nombre de générations demandées : " }
-                            "{max_gen}"
+                            strong { "Nombre {entity} : " }
+                            "{nb}"
                         }
                         p {
-                            strong { "Total des individus trouvés dans le fichier : " }
-                            "{individuals_len}"
+                            strong { "Ligne de commande : " }
+                            {command_line()}
                         }
                     }
                     if let Ok(errors) = ERRORS.read() {
@@ -159,8 +254,8 @@ fn App(
                             }
                         }
                     }
-                    h1 { class: "-mb-2.5 mt-4", "Liste brute de tous les individus" }
-                    {liste_individus}
+                    h1 { class: "-mb-2.5 mt-4", {title} }
+                    {contents}
                 }
             }
         }
@@ -188,30 +283,11 @@ fn main() -> Result<()> {
         args.input
     ))?;
 
-    println!(
-        "Génération du HTML pour {} individus...",
-        data.individuals.len()
-    );
-
-    // Liste des xref des individus
-    let mut xrefs = Vec::new();
-    for individual in &data.individuals {
-        let xref = individual
-            .xref
-            .clone()
-            .context(format!("Xref manquants pour l'individu : {:?}", individual))?;
-        xrefs.push(xref);
-    }
+    println!("Génération du HTML",);
 
     // Rendu du composant Dioxus en chaîne HTML statique
     let html_string = dioxus_ssr::render_element(rsx! {
-        App {
-            xrefs,
-            data,
-            input: args.input,
-            start_person: args.start_name,
-            max_gen: args.generations,
-        }
+        App { args: args.clone(), data }
     });
 
     // Création du fichier HTML de sortie

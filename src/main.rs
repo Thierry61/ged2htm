@@ -4,6 +4,7 @@ use clap::{ArgGroup, Parser, Subcommand};
 use dioxus::prelude::*;
 use ged_io::types::GedcomData;
 use ged_io::Gedcom;
+use jiff::{Unit, ZonedDateTime};
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write;
@@ -51,7 +52,7 @@ mod test_helpers;
 // Bypass Dioxus asset pipeline because the program isn't a web server but just a CLI tool.
 // Instead embed assets inside the binary at compile time.
 // Using this strategy ged2htm.exe remains 100% portable. It will read the genealogy file,
-// compile a single html file, and embed all styles, icons, and layout layouts directly inside it,
+// compile a single html file, and embed all styles, icons, and layouts directly inside it,
 // so the user can easily share the file with anyone else.
 const TAILWIND_CSS: &str = include_str!("../assets/tailwind.css");
 
@@ -141,6 +142,28 @@ struct AllArgs {
 // TODO: pour l'instant l'application ne fait qu'afficher la liste de tous les individus
 #[component]
 fn App(args: Args, data: GedcomData) -> Element {
+    // Date et heure du fichier GED
+    let mut ged_date = "Unknown".to_string();
+    let mut ged_time = "Unknown".to_string();
+    if let Some(header) = &data.header {
+        if let Some(ref date) = header.date {
+            if let Some(ref date) = date.value {
+                ged_date = date.clone();
+            }
+            if let Some(ref time) = date.time {
+                ged_time = time.clone();
+            }
+        }
+    }
+
+    // Date et heure courante
+    let now = ZonedDateTime::now().round(Unit::Second)?;
+    let now = now.strftime("%d %b %Y %H:%M:%S").to_string().to_uppercase();
+
+    // Nombre total d'individus et de familles
+    let nb_individus = data.individuals.len();
+    let nb_familles = data.families.len();
+
     // Context provider pour éviter de passer la structure GEDCOM en paramètre à chaque composant
     let data = use_store(|| data);
     use_context_provider(|| data);
@@ -219,20 +242,38 @@ fn App(args: Args, data: GedcomData) -> Element {
                     h1 { class: "pb-2.5", "Rapport d'extraction GEDCOM" }
                     div { class: "border-l-2 border-l-solid border-blue-500 bg-blue-75 rounded-r-lg p-4 mb-5",
                         p {
+                            strong { "Ligne de commande : " }
+                            {command_line()}
+                        }
+                        br {}
+                        p {
                             strong { "Fichier GED d'entrée : " }
                             "{args.input.display()}"
                         }
+                        p {
+                            strong { "Date et heure de génération du fichier GED : " }
+                            "{ged_date} {ged_time}"
+                        }
+                        p {
+                            strong { "Nombre total d'individus : " }
+                            "{nb_individus}"
+                        }
+                        p {
+                            strong { "Nombre total de familles : " }
+                            "{nb_familles}"
+                        }
+                        br {}
                         p {
                             strong { "Fichier HTML de sortie : " }
                             "{args.output.display()}"
                         }
                         p {
-                            strong { "Nombre {entity} : " }
-                            "{nb}"
+                            strong { "Date et heure de génération du fichier HTML : " }
+                            "{now}"
                         }
                         p {
-                            strong { "Ligne de commande : " }
-                            {command_line()}
+                            strong { "Nombre {entity} : " }
+                            "{nb}"
                         }
                     }
                     if let Ok(errors) = ERRORS.read() {

@@ -61,7 +61,7 @@ fn shell_quote(s: &str) -> String {
     result
 }
 
-// Autre cible, notamment celle utilisée par `dx build`
+// Autres cibles, notamment celle utilisée par `dx build`
 #[cfg(not(any(unix, windows)))]
 fn shell_quote(s: &str) -> String {
     s.to_string()

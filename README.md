@@ -21,7 +21,7 @@ le menu : "Ma généalogie" puis "Mise à jour GEDCOM" puis "Exports et sauvegar
 cocher "Mon arbre en ligne" et sélectionner le format GEDCOM (*.ged) et enfin cliquer sur le bouton
 "Télécharger".
 
-Le fichier exporté doit être ensuite passé en paramètre au progamme selon la syntaxe :
+Le fichier exporté doit être ensuite passé en paramètre au programme selon la syntaxe :
 
 ```
 Usage: ged2htm.exe --input <INPUT> book [OPTIONS] --start <START> <--ascending|--descending>

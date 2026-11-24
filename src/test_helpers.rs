@@ -11,16 +11,18 @@
 // }
 // L'appel pour cet exemple est :
 // generer_verif_err!(
+//     err<&str>
 //     fonction_test: interpreter_lieu,
 //     chaine_assert: "le lieu",
 // );
 #[macro_export]
 macro_rules! generer_verif_err {
     (
+        $err_name:ident < $type_arg:ty >
         fonction_test: $f_test:expr,
         chaine_assert: $msg_assert:expr,
     ) => {
-        fn err(input: &str) -> Vec<String> {
+        fn $err_name(input: $type_arg) -> Vec<String> {
             // Appel de la fonction testée
             let parts = $f_test(input);
             // Elle doit générer une erreur
@@ -32,8 +34,11 @@ macro_rules! generer_verif_err {
             let errors = ERRORS.read().unwrap();
             // Retrouve l'erreur correspondant au test courant
             // (les tests étant lancés en parallèle d'autres threads ont pu ajouter d'autres erreurs)
-            let error = errors.get(input).unwrap();
-            error.chain().map(|err| err.to_string()).collect()
+            if let Some(error) = errors.get(&input.to_string()) {
+                error.chain().map(|err| err.to_string()).collect()
+            } else {
+                vec![format!("Missing error key: {input}")]
+            }
         }
     };
 }
@@ -49,26 +54,30 @@ macro_rules! generer_verif_err {
 // paramétrés. La closure permet de résoudre un problème d'hygiène de macro sur la variable parts.
 // L'appel pour cet exemple est :
 // generer_verif_ok!(
+//     ok<&str, (&'static str, String)>
 //     fonction_test: interpreter_lieu,
 //     chaine_assert: "le lieu",
-//     types_retour: (&'static str, String),
 //     extracteur: |p: PlaceParts| (p.prefix, p.place)
 // );
 #[macro_export]
 macro_rules! generer_verif_ok {
     (
+        $ok_name:ident < $type_arg:ty , $type_ret:ty >
         fonction_test: $f_test:expr,
         chaine_assert: $msg_assert:expr,
-        types_retour: ( $($type_ret:ty),+ $(,)? ),
         extracteur: $extracteur:expr // <--- Reçoit une closure |parts| -> tuple
     ) => {
-        fn ok(input: &str) -> ( $($type_ret),+ ) {
+        fn $ok_name(input: $type_arg) -> $type_ret {
             // Appel de la fonction testée
             let parts = $f_test(input);
             // Elle ne doit pas générer d'erreur
-            assert!(!parts.error, concat!("Un succès était attendu pour ", $msg_assert, " {}"), input);
+            assert!(
+                !parts.error,
+                concat!("Un succès était attendu pour ", $msg_assert, " {}"),
+                input
+            );
             // On appelle la closure en lui passant parts
             $extracteur(parts)
         }
-    }
+    };
 }

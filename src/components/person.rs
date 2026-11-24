@@ -3,7 +3,7 @@ use ged_io::types::individual::family_link::FamilyLinkType;
 use ged_io::types::individual::gender::{Gender, GenderType};
 use ged_io::types::GedcomData;
 
-use crate::date::{traduire_date, DateParts};
+use crate::date::{age, traduire_date, Age, DateParts};
 use crate::full_name::{nom_complet, NameParts};
 use crate::notes::concat_notes;
 use crate::place::{interpreter_lieu, PlaceParts};
@@ -35,6 +35,7 @@ fn DateLieu(
     event: &'static str,
     feminine: &'static str,
     date: DateParts,
+    age: Age,
     place_parts: PlaceParts,
     notes: Vec<String>,
 ) -> Element {
@@ -45,13 +46,23 @@ fn DateLieu(
                 span { class: "italic text-gray-400", "{event}{feminine} " }
                 if !date1.date.is_empty() {
                     // Préfixe de la date
-                    span { class: "italic text-gray-400", "{date1.prefix} " }
+                    span { class: "italic text-gray-400", "{date1.prefix}" }
                     // Date (en rouge s'il y a eu une erreur)
-                    span { class: if date.error { "error" }, "{date1.date} " }
+                    span { class: if date.error { "error" }, " {date1.date}" }
                     // Deuxième date (avec son propre préfixe) pour une date composée (BET ou FROM)
                     if let Some(date2) = date.opt_date2 {
-                        span { class: "italic text-gray-400", " {date2.prefix} " }
-                        {date2.date}
+                        span { class: "italic text-gray-400", " {date2.prefix}" }
+                        " {date2.date}"
+                    }
+                    span { class: "italic text-gray-600",
+                        // Indication éventuelle de l'age
+                        if !age.error && !age.age.is_empty() {
+                            " {&age.age}"
+                        }
+                        // Virgule et espace si un lieu suit
+                        if !place_parts.place.is_empty() {
+                            ", "
+                        }
                     }
                 }
                 if !place_parts.place.is_empty() {
@@ -225,6 +236,9 @@ pub fn Individu(xref: String) -> Element {
     let full_name = nom_complet((&full_name, nick_name));
     let father = nom_complet((&father, father_nick));
     let mother = nom_complet((&mother, mother_nick));
+    // Age lors du décès
+    let age = age(&birth, &death);
+
     rsx! {
         div { id: xref,
             div { class: "mb-1",
@@ -240,6 +254,7 @@ pub fn Individu(xref: String) -> Element {
                 event: "Né",
                 feminine,
                 date: birth,
+                age: Age::default(),
                 place_parts: birth_place,
                 notes: birth_notes,
             }
@@ -247,6 +262,7 @@ pub fn Individu(xref: String) -> Element {
                 event: "Décédé",
                 feminine,
                 date: death,
+                age,
                 place_parts: death_place,
                 notes: death_notes,
             }

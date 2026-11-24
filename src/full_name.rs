@@ -106,14 +106,15 @@ mod tests {
     // Les fonctions ok et err étant similaires entre les modules testés
     // on utilise des macros définies dans test_helpers.rs pour les générer
     crate::generer_verif_err!(
+        err<&str>
         fonction_test: nom_complet_sans_surnom,
         chaine_assert: "le nom",
     );
 
     crate::generer_verif_ok!(
+        ok<&str, (String, Option<(String, String)>)>
         fonction_test: nom_complet_sans_surnom,
         chaine_assert: "le nom",
-        types_retour: (String, Option<(String, String)>),
         extracteur: |p: NameParts| (
             p.before_or_full,
             p.preferred_and_rest

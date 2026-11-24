@@ -1,5 +1,6 @@
 use crate::ERRORS;
 use anyhow::{bail, Context, Result};
+use jiff::{civil::Date, Unit};
 use phf::phf_map;
 
 // Conversion des dates GEDCOM
@@ -10,22 +11,22 @@ use phf::phf_map;
 // Table de hashage statique (du module phf) pour la traduction des mois
 // Les casses possibles sont : tout en majuscule, tout en minuscule ou
 // la première lettre en majuscule et le reste en minuscule.
-static MOIS_TRADUCTION: phf::Map<&'static str, &'static str> = phf_map! {
-    "JAN" | "Jan" | "jan" => "janv.",
-    "FEB" | "Feb" | "feb" => "févr.",
-    "MAR" | "Mar" | "mar" => "mars",
-    "APR" | "Apr" | "apr" => "avr.",
-    "MAY" | "May" | "may" => "mai",
-    "JUN" | "Jun" | "jun" => "juin",
-    "JUL" | "Jul" | "jul" => "juil.",
-    "AUG" | "Aug" | "aug" => "août",
-    "SEP" | "Sep" | "sep" => "sept.",
-    "OCT" | "Oct" | "oct" => "oct.",
-    "NOV" | "Nov" | "nov" => "nov.",
-    "DEC" | "Dec" | "dec" => "déc.",
+static MOIS_TRADUCTION: phf::Map<&'static str, (&'static str, i8)> = phf_map! {
+    "JAN" | "Jan" | "jan" => ("janv.", 1),
+    "FEB" | "Feb" | "feb" => ("févr.", 2),
+    "MAR" | "Mar" | "mar" => ("mars", 3),
+    "APR" | "Apr" | "apr" => ("avr.", 4),
+    "MAY" | "May" | "may" => ("mai", 5),
+    "JUN" | "Jun" | "jun" => ("juin", 6),
+    "JUL" | "Jul" | "jul" => ("juil.", 7),
+    "AUG" | "Aug" | "aug" => ("août", 8),
+    "SEP" | "Sep" | "sep" => ("sept.", 9),
+    "OCT" | "Oct" | "oct" => ("oct.", 10),
+    "NOV" | "Nov" | "nov" => ("nov.", 11),
+    "DEC" | "Dec" | "dec" => ("déc.", 12),
 };
 
-/// Formate le jour anglais (01-31) selon les règles de typographie françaises :
+/// Formate le jour (01-31) selon les règles de typographie françaises :
 /// "01" -> "1er", "02"-"09" -> "2"-"9", les autres restent identiques.
 fn formater_jour(jour_str: &str) -> Result<String> {
     // Vérification que le jour est bien numérique
@@ -65,7 +66,7 @@ fn valider_annee(annee_str: &str) -> Result<&str> {
 }
 
 /// Traduit le mois abrégé à l'aide de la table statique phf
-fn traduire_mois(mois_str: &str) -> Result<&'static str> {
+fn traduire_mois(mois_str: &str) -> Result<(&'static str, i8)> {
     let first_three_chars = mois_str
         .get(0..3)
         .with_context(|| format!("Mois abrégé anglais trop court : '{}'", mois_str))?;
@@ -77,43 +78,50 @@ fn traduire_mois(mois_str: &str) -> Result<&'static str> {
 
 /// Parse et traduit une date élémentaire de l'anglais vers le français.
 /// Formats acceptés : "JJ MMM AAAA", "MMM AAAA" ou "AAAA"
-fn traduire_date_simple(date: &str, elements: &[&str]) -> Result<String, anyhow::Error> {
+fn traduire_date_simple(input: &str, elements: &[&str]) -> Result<(String, Date), anyhow::Error> {
     match elements {
         // Cas 1 : Jour (1 ou 2 chiffres), Mois (3 lettres), Année (4 chiffres)
         [jour, mois, annee] => {
             let j = formater_jour(jour)
-                .with_context(|| format!("Échec du traitement du jour dans la date '{date}'"))?;
-            let m = traduire_mois(mois)
-                .with_context(|| format!("Échec de la traduction du mois dans la date '{date}'"))?;
-            let a = valider_annee(annee).with_context(|| {
-                format!("Échec de la validation de l'année dans la date '{date}'")
+                .with_context(|| format!("Échec du traitement du jour dans la date '{input}'"))?;
+            let m = traduire_mois(mois).with_context(|| {
+                format!("Échec de la traduction du mois dans la date '{input}'")
             })?;
-            // TODO: convertir la date pour vérifier qu'elle est valide (pour exclure des dates comme 29 févr. 2026, 31 avr. 2024, ...)
-            // TODO: retourner cette date pour faire des calculs d'âge ou d'ordonnancement d'événements
-            Ok(format!("{} {} {}", j, m, a))
+            let a = valider_annee(annee).with_context(|| {
+                format!("Échec de la validation de l'année dans la date '{input}'")
+            })?;
+            // Calcul la date pour faire des calculs d'âge ou d'ordonnancement d'événements
+            let date = Date::new(annee.parse()?, m.1, jour.parse()?)
+                .with_context(|| format!("Échec de la conversion de la date '{input}'"))?;
+            Ok((format!("{} {} {}", j, m.0, a), date))
         }
 
         // Cas 2 : Mois (3 lettres), Année (4 chiffres) (Le jour est absent)
         [mois, annee] => {
-            let m = traduire_mois(mois)
-                .with_context(|| format!("Échec de la traduction du mois dans la date '{date}'"))?;
-            let a = valider_annee(annee).with_context(|| {
-                format!("Échec de la validation de l'année dans la date '{date}'")
+            let m = traduire_mois(mois).with_context(|| {
+                format!("Échec de la traduction du mois dans la date '{input}'")
             })?;
-            Ok(format!("{} {}", m, a))
+            let a = valider_annee(annee).with_context(|| {
+                format!("Échec de la validation de l'année dans la date '{input}'")
+            })?;
+            let date = Date::new(annee.parse()?, m.1, 1)
+                .with_context(|| format!("Échec de la conversion de la date '{input}'"))?;
+            Ok((format!("{} {}", m.0, a), date))
         }
 
         // Cas 3 : Année seule (4 chiffres) (Le jour et le mois sont absents)
         [annee] => {
             let a = valider_annee(annee).with_context(|| {
-                format!("Échec de la validation de l'année dans la date '{date}'")
+                format!("Échec de la validation de l'année dans la date '{input}'")
             })?;
-            Ok(a.to_string())
+            let date = Date::new(annee.parse()?, 1, 1)
+                .with_context(|| format!("Échec de la conversion de la date '{input}'"))?;
+            Ok((a.to_string(), date))
         }
 
         // Format invalide (chaîne vide ou trop d'éléments)
         _ => bail!(
-            "Format de date invalide. Attendu: 'JJ MMM AAAA', 'MMM AAAA' ou 'AAAA'. Reçu: '{date}'"
+            "Format de date invalide. Attendu: 'JJ MMM AAAA', 'MMM AAAA' ou 'AAAA'. Reçu: '{input}'"
         ),
     }
 }
@@ -132,33 +140,52 @@ pub struct DateParts {
     pub error: bool,
     // Date de base
     pub date1: ElementaryDateParts,
+    // Date parsée
+    pub date: Date,
+    // Indique si la date est approximative (mot clé ABT, BET, ... ou bien jour et éventuellement mois manquant)
+    approx: bool,
     // Date supplémentaire pour les cas BET et FROM
     pub opt_date2: Option<ElementaryDateParts>,
 }
 
+impl std::fmt::Display for DateParts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.date1.date)
+    }
+}
+
 // Construction d'une date simple ou double
 impl DateParts {
-    fn new_simple(prefix: &'static str, date: String) -> Self {
+    fn new_simple(prefix: &'static str, date: (String, Date), approx: bool) -> Self {
         Self {
-            date1: ElementaryDateParts { prefix, date },
+            date1: ElementaryDateParts {
+                prefix,
+                date: date.0,
+            },
+            date: date.1,
+            approx,
             ..Default::default()
         }
     }
+    // Date à 2 élèments (pour BET et FROM)
     fn new_double(
         prefix1: &'static str,
-        date1: String,
+        date1: (String, Date),
         prefix2: &'static str,
-        date2: String,
+        date2: (String, Date),
     ) -> Self {
         Self {
             date1: ElementaryDateParts {
                 prefix: prefix1,
-                date: date1,
+                date: date1.0,
             },
+            date: date1.1,
             opt_date2: Some(ElementaryDateParts {
                 prefix: prefix2,
-                date: date2,
+                date: date2.0,
             }),
+            // La date est approximative dans ces 2 cas
+            approx: true,
             ..Default::default()
         }
     }
@@ -173,9 +200,9 @@ impl DateParts {
 /// - AFT date : le préfixe retourné est alors "après le" ou "après"
 /// - BET date AND date : le préfixe de la 1ère date est alors "entre le" ou "entre" et celui de la 2ième date "et le" ou "et"
 /// - FROM date TO date : le préfixe de la 1ère date est alors "du" ou "de" et celui de la 2ième date "au" ou "à"
-fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
+fn traduire_date_avec_err(input: &str) -> Result<DateParts> {
     // Découpage par espace en ignorant les espaces multiples potentiels
-    let elements: Vec<&str> = date.split_whitespace().collect();
+    let elements: Vec<&str> = input.split_whitespace().collect();
     let (&first, rest) = elements.split_first().context("Date vide !")?;
     match first {
         // Vers
@@ -183,7 +210,8 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             let prefix = if rest.len() == 3 { "vers le" } else { "vers" };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date, rest)?,
+                traduire_date_simple(input, rest)?,
+                true, // La date est approximative
             ))
         }
         // Peut-être
@@ -195,7 +223,8 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date, rest)?,
+                traduire_date_simple(input, rest)?,
+                true, // La date est approximative
             ))
         }
         // Avant
@@ -203,7 +232,8 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             let prefix = if rest.len() == 3 { "avant le" } else { "avant" };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date, rest)?,
+                traduire_date_simple(input, rest)?,
+                true, // La date est approximative
             ))
         }
         // Après
@@ -215,7 +245,8 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date, rest)?,
+                traduire_date_simple(input, rest)?,
+                true, // La date est approximative
             ))
         }
         // Ce format désigne un événement ponctuel unique qui a eu lieu à une date précise, mais
@@ -226,9 +257,9 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             let mut iter = rest.split(|&k| k == "AND");
             let rest1 = iter
                 .next()
-                .with_context(|| format!("Mot clé AND manquant dans la date '{date}"))?;
+                .with_context(|| format!("Mot clé AND manquant dans la date '{input}"))?;
             if rest1.is_empty() {
-                bail!("Date vide entre BET et AND dans la date '{date}")
+                bail!("Date vide entre BET et AND dans la date '{input}")
             }
             let prefix1 = if rest1.len() == 3 {
                 "entre le"
@@ -238,16 +269,16 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             let rest2 = iter
                 .next()
                 // rest2 est en fait vide quand AND est le dernier élément, mais il faut bien gérer ce cas d'erreur
-                .with_context(|| format!("Date vide après AND dans la date '{date}"))?;
+                .with_context(|| format!("Date vide après AND dans la date '{input}"))?;
             if rest2.is_empty() {
-                bail!("Date vide après AND dans la date '{date}")
+                bail!("Date vide après AND dans la date '{input}")
             }
             let prefix2 = if rest2.len() == 3 { "et le" } else { "et" };
             Ok(DateParts::new_double(
                 prefix1,
-                traduire_date_simple(date, rest1)?,
+                traduire_date_simple(input, rest1)?,
                 prefix2,
-                traduire_date_simple(date, rest2)?,
+                traduire_date_simple(input, rest2)?,
             ))
         }
         // Ce format désigne un événement continu ou répétitif qui s'est déroulé sur toute
@@ -257,31 +288,33 @@ fn traduire_date_avec_err(date: &str) -> Result<DateParts> {
             let mut iter = rest.split(|&k| k == "TO");
             let rest1 = iter
                 .next()
-                .with_context(|| format!("Mot clé TO manquant dans la date '{date}"))?;
+                .with_context(|| format!("Mot clé TO manquant dans la date '{input}"))?;
             if rest1.is_empty() {
-                bail!("Date vide entre FROM et TO dans la date '{date}")
+                bail!("Date vide entre FROM et TO dans la date '{input}")
             }
             let prefix1 = if rest1.len() == 3 { "du" } else { "de" };
             let rest2 = iter
                 .next()
                 // rest2 est en fait vide quand TO est le dernier élément, mais il faut bien gérer ce cas d'erreur
-                .with_context(|| format!("Date vide après TO dans la date '{date}"))?;
+                .with_context(|| format!("Date vide après TO dans la date '{input}"))?;
             if rest2.is_empty() {
-                bail!("Date vide après TO dans la date '{date}")
+                bail!("Date vide après TO dans la date '{input}")
             }
             let prefix2 = if rest2.len() == 3 { "au" } else { "à" };
             Ok(DateParts::new_double(
                 prefix1,
-                traduire_date_simple(date, rest1)?,
+                traduire_date_simple(input, rest1)?,
                 prefix2,
-                traduire_date_simple(date, rest2)?,
+                traduire_date_simple(input, rest2)?,
             ))
         }
         _ => {
             let prefix = if elements.len() == 3 { "le" } else { "en" };
             Ok(DateParts::new_simple(
                 prefix,
-                traduire_date_simple(date, &elements)?,
+                traduire_date_simple(input, &elements)?,
+                // La date est approximative s'il manque un élément (jour et éventuellement mois)
+                elements.len() != 3,
             ))
         }
     }
@@ -296,7 +329,7 @@ pub fn traduire_date(date: &str) -> DateParts {
                 errors.insert(date.to_string(), err);
             });
             // On retourne la date brute d'origine sans préfixe
-            let mut ret = DateParts::new_simple("", date.to_string());
+            let mut ret = DateParts::new_simple("", (date.to_string(), Date::default()), true);
             // On positionne le flag d'erreur pour qu'elle soit affichée en rouge.
             ret.error = true;
             ret
@@ -304,21 +337,93 @@ pub fn traduire_date(date: &str) -> DateParts {
     }
 }
 
+// Calcul l'age d'un individu lors d'un évènement (mariage et décès)
+// L'age retourné est l'age révolu avec un préfixe indiquant s'il est approximatif ou pas.
+pub fn age_avec_err(birth: &Date, event: &Date, approx: bool) -> Result<String> {
+    let span = birth.until((Unit::Year, *event))?;
+    if span.is_negative() {
+        // Cas spécial car get_years retourne 0 au lieu de -1
+        // quand la différence est négative mais de moins d'un an
+        bail!("Age négatif ({event} < {birth})");
+    }
+    if span.is_zero() {
+        if !approx {
+            // Un enfant mort le jour de sa naissance n'est pas forcément mort-né
+            // mais on simplifie
+            return Ok("mort-né".to_string());
+        } else {
+            // En revanche si les ages sont approximatifs, on indique "en bas âge"
+            return Ok("en bas âge".to_string());
+        }
+    }
+    match span.get_years() {
+        // Age négatif => ne doit pas se produire car ce cas est déjà traité plus haut
+        age if age < 0 => bail!("Age négatif (BUG)"),
+        // avant un an / en bas âge
+        0 => Ok((if approx { "en bas âge" } else { "avant un an" }).to_string()),
+        // à un an / vers un an
+        1 => Ok(format!("{} un an", if approx { "vers" } else { "à" })),
+        // à {age} ans / vers {age} ans
+        age => Ok(format!("{} {age} ans", if approx { "vers" } else { "à" })),
+    }
+}
+
+// Age d'un individu lors d'un événement de type mariage ou décès.
+// Il est éventuellement approximatif et a un préfixe (à, vers, ..)
+// Un flag d'erreur indique si le calcul a généré une erreur.
+#[derive(Default, Clone, PartialEq)]
+pub struct Age {
+    // Age préfixé et éventuellement approximatif
+    pub age: String,
+    // Flag d'erreur
+    pub error: bool,
+}
+
+pub fn age(birth: &DateParts, event: &DateParts) -> Age {
+    if birth.error || event.error {
+        // On retourne un age vide si l'une des 2 dates est erronée, sans déclencher d'erreur supplémentaire
+        // (car une erreur sur birth ou event à déjà été générée)
+        return Age::default();
+    }
+    if birth.date == Date::default() || event.date == Date::default() {
+        // Idem si une des 2 dates n'a pas été renseignée
+        return Age::default();
+    }
+    match age_avec_err(&birth.date, &event.date, birth.approx || event.approx) {
+        Ok(age) => Age { age, error: false },
+        Err(err) => {
+            // On construit une clé basée sur la 2ème date (plus simple pour les tests)
+            let key = event.date1.date.clone();
+            // On enregistre l'erreur
+            write_errors!(errors, {
+                errors.insert(key.clone(), err);
+            });
+            // On retourne la clé (choix possibles: ne pas l'afficher ou l'afficher en rouge)
+            Age {
+                age: key,
+                error: true,
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jiff::civil::date;
 
     // Les fonctions ok et err étant similaires entre les modules testés
     // on utilise des macros définies dans test_helpers.rs pour les générer
     crate::generer_verif_err!(
+        err<&str>
         fonction_test: traduire_date,
         chaine_assert: "la date",
     );
 
     crate::generer_verif_ok!(
+        ok<&str, (&'static str, String, Option<(&'static str, String)>)>
         fonction_test: traduire_date,
         chaine_assert: "la date",
-        types_retour: (&'static str, String, Option<(&'static str, String)>),
         extracteur: |p: DateParts| (
             p.date1.prefix,
             p.date1.date,
@@ -461,11 +566,127 @@ mod tests {
     }
 
     #[test]
-    fn test_erreur_format_general() {
+    fn test_erreurs_format_general() {
         // Trop de segments
         assert_eq!(err("01 JAN AAAA 2026"), ["Format de date invalide. Attendu: 'JJ MMM AAAA', 'MMM AAAA' ou 'AAAA'. Reçu: '01 JAN AAAA 2026'"]);
 
         // Vide
         assert_eq!(err(""), ["Date vide !"]);
+    }
+
+    // Test de dates syntaxiquement correctes mais sémantiquement invalides
+    #[test]
+    fn test_dates_invalides() {
+        // 31 d'un mois sur 30 jours
+        assert_eq!(
+            err("31 APR 2026"),
+            [
+                "Échec de la conversion de la date '31 APR 2026'",
+                "parameter 'day' for `2026-04` is invalid, must be in range `1..=30`"
+            ]
+        );
+
+        // 29 février d'une année non bissextile
+        assert_eq!(
+            err("29 FEB 2026"),
+            [
+                "Échec de la conversion de la date '29 FEB 2026'",
+                "parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"
+            ]
+        );
+    }
+
+    // Construction d'un DateParts pour les tests
+    fn date_parts(date: Date, date_str: &str, approx: bool) -> DateParts {
+        let date1 = ElementaryDateParts {
+            prefix: "",
+            date: date_str.to_string(),
+        };
+        DateParts {
+            date1,
+            date,
+            approx,
+            ..Default::default()
+        }
+    }
+
+    // Fonction fixant la date d'origine pour les calculs d'age pour
+    // pouvoir utiliser les fonctions ok et err avec un seul argument
+    fn gen_age(event: &DateParts) -> Age {
+        let date = date(1940, 10, 15);
+        let birth = DateParts {
+            date,
+            ..Default::default()
+        };
+        age(&birth, event)
+    }
+
+    crate::generer_verif_err!(
+        err2<&DateParts>
+        fonction_test: gen_age,
+        chaine_assert: "l'age",
+    );
+
+    crate::generer_verif_ok!(
+        ok2<&DateParts, String>
+        fonction_test: gen_age,
+        chaine_assert: "l'age",
+        extracteur: |p: Age| p.age
+    );
+
+    #[test]
+    fn test_ages_exacts() {
+        // Test d'un age négatif
+        assert_eq!(
+            err2(&date_parts(date(1940, 10, 14), "14 OCT 1940", false)),
+            ["Age négatif (1940-10-14 < 1940-10-15)"]
+        );
+
+        // Test mort-né
+        assert_eq!(ok2(&date_parts(date(1940, 10, 15), "", false)), "mort-né");
+
+        // Test moins d'un an
+        assert_eq!(
+            ok2(&date_parts(date(1940, 10, 16), "", false)),
+            "avant un an"
+        );
+
+        // Test un an
+        assert_eq!(ok2(&date_parts(date(1941, 10, 15), "", false)), "à un an");
+
+        // Test > un an
+        assert_eq!(ok2(&date_parts(date(1942, 10, 15), "", false)), "à 2 ans");
+
+        // Test de la transition de l'age révolu
+        assert_eq!(ok2(&date_parts(date(1950, 10, 14), "", false)), "à 9 ans");
+        assert_eq!(ok2(&date_parts(date(1950, 10, 15), "", false)), "à 10 ans");
+    }
+
+    #[test]
+    fn test_ages_approximatifs() {
+        // Test d'un age négatif
+        assert_eq!(
+            err2(&date_parts(date(1940, 10, 14), "14 OCT 1940", true)),
+            ["Age négatif (1940-10-14 < 1940-10-15)"]
+        );
+
+        // Test mort-né
+        assert_eq!(ok2(&date_parts(date(1940, 10, 15), "", true)), "en bas âge");
+
+        // Test moins d'un an
+        assert_eq!(ok2(&date_parts(date(1940, 10, 16), "", true)), "en bas âge");
+
+        // Test un an
+        assert_eq!(ok2(&date_parts(date(1941, 10, 15), "", true)), "vers un an");
+
+        // Test > un an
+        assert_eq!(ok2(&date_parts(date(1942, 10, 15), "", true)), "vers 2 ans");
+
+        // Test de la transition de l'age révolu
+        assert_eq!(ok2(&date_parts(date(1950, 10, 14), "", true)), "vers 9 ans");
+        assert_eq!(
+            ok2(&date_parts(date(1950, 10, 15), "", true)),
+            "vers 10 ans"
+        );
     }
 }

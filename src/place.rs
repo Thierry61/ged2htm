@@ -702,14 +702,15 @@ mod tests {
     // Les fonctions ok et err étant similaires entre les modules testés
     // on utilise des macros définies dans test_helpers.rs pour les générer
     crate::generer_verif_err!(
+        err<&str>
         fonction_test: interpreter_lieu,
         chaine_assert: "le lieu",
     );
 
     crate::generer_verif_ok!(
+        ok<&str, (&'static str, String)>
         fonction_test: interpreter_lieu,
         chaine_assert: "le lieu",
-        types_retour: (&'static str, String),
         extracteur: |p: PlaceParts| (p.prefix, p.place)
     );
 

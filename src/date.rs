@@ -90,7 +90,7 @@ fn traduire_date_simple(input: &str, elements: &[&str]) -> Result<(String, Date)
             let a = valider_annee(annee).with_context(|| {
                 format!("Échec de la validation de l'année dans la date '{input}'")
             })?;
-            // Calcul la date pour faire des calculs d'âge ou d'ordonnancement d'événements
+            // Parse la date pour pouvoir faire des calculs d'âge ou d'ordonnancement d'événements
             let date = Date::new(annee.parse()?, m.1, jour.parse()?)
                 .with_context(|| format!("Échec de la conversion de la date '{input}'"))?;
             Ok((format!("{} {} {}", j, m.0, a), date))

@@ -107,7 +107,7 @@ fn NomComplet(parts: NameParts) -> Element {
     }
 }
 
-// Affichage du nom  complet du père ou de la mère
+// Affichage du nom complet du père ou de la mère
 #[component]
 fn Parent(parts: NameParts, parent: &'static str, xref: String) -> Element {
     rsx! {
@@ -127,6 +127,12 @@ fn Parent(parts: NameParts, parent: &'static str, xref: String) -> Element {
 #[component]
 // Composant pour afficher un individu
 pub fn Individu(xref: String) -> Element {
+    // Occupe une case vide pour le cas d'un conjoint manquant dans la liste des familles.
+    if xref.is_empty() {
+        return rsx! {
+            div { "???" }
+        };
+    }
     let data = use_context::<Store<GedcomData>>();
     let data = data.read();
     let mut father = String::new();
@@ -241,7 +247,7 @@ pub fn Individu(xref: String) -> Element {
 
     rsx! {
         div { id: xref,
-            div { class: "mb-1",
+            div { class: "mb-2 py-1.5 px-2 border-2 rounded-lg shadow-lg border-blue-200",
                 if let Some(gender_icon) = gender_icon {
                     img { class: "inline mr-2 align-baseline", src: gender_icon }
                 }

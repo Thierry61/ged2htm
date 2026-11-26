@@ -15,10 +15,13 @@ use std::sync::LazyLock;
 // L'encapsulation par use_context::<Store<...> ne marchant pas en mode test (car le runtime Dioxus n'est pas présent),
 // on utilise la structure LazyLock<RwLock<...> à la place.
 // Pourquoi cette approche :
-// LazyLock gère l'initialisation unique : Il permet de contourner le fait que BTreeMap::new() et RwLock::new() ne peuvent pas être évalués directement à la compilation.
-// RwLock (Read-Write Lock) permet la concurrence : Contrairement à un Mutex classique qui bloque tout le monde dès qu'on y accède, le RwLock offre un excellent compromis :
-// -  Plusieurs threads peuvent lire (.read()) la BTreeMap en même temps sans se bloquer.
-// -  Un seul thread peut écrire (.write()) à la fois, bloquant temporairement les lecteurs pour éviter les corruptions de données (les data races).
+// - LazyLock gère l'initialisation unique : Il permet de contourner le fait que BTreeMap::new() et RwLock::new()
+//   ne peuvent pas être évalués directement à la compilation.
+// - RwLock (Read-Write Lock) permet la concurrence : Contrairement à un Mutex classique qui bloque tout le monde
+//   dès qu'on y accède, le RwLock offre un excellent compromis :
+//   - Plusieurs threads peuvent lire (.read()) la BTreeMap en même temps sans se bloquer.
+//   - Un seul thread peut écrire (.write()) à la fois, bloquant temporairement les lecteurs pour éviter les corruptions
+//     de données (data races).
 static ERRORS: LazyLock<std::sync::RwLock<BTreeMap<String, Error>>> =
     LazyLock::new(|| std::sync::RwLock::new(BTreeMap::new()));
 
@@ -40,11 +43,13 @@ mod place;
 
 // Import des composants
 mod components;
-use components::person_list::{ListeIndividus, ListeIndividusProps};
+use components::list::{ListeFamilles, ListeFamillesProps, ListeIndividus, ListeIndividusProps};
 
 // Autres imports
 mod shell_quote;
 use shell_quote::command_line;
+mod adopt;
+use adopt::Adoption;
 
 #[cfg(test)]
 mod test_helpers;
@@ -164,6 +169,9 @@ fn App(args: Args, data: GedcomData) -> Element {
     let nb_individus = data.individuals.len();
     let nb_familles = data.families.len();
 
+    // Définitions des adoptions
+    Adoption::init(&data);
+
     // Context provider pour éviter de passer la structure GEDCOM en paramètre à chaque composant
     let data = use_store(|| data);
     use_context_provider(|| data);
@@ -215,12 +223,20 @@ fn App(args: Args, data: GedcomData) -> Element {
                     ListeIndividus(ListeIndividusProps { xrefs }),
                 )
             } else {
+                let xrefs = data
+                    .read()
+                    .families
+                    .iter()
+                    .map(|family| {
+                        family.xref.clone().with_context(|| {
+                            format!("Xref manquant pour la famille : {:?}", family)
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
                 (
                     "Liste de toutes les familles".to_string(),
-                    0,
-                    rsx! {
-                        div { class: "mt-4", "TODO: Liste de toutes les familles à développer" }
-                    },
+                    xrefs.len(),
+                    ListeFamilles(ListeFamillesProps { xrefs }),
                 )
             }
         }
@@ -238,7 +254,7 @@ fn App(args: Args, data: GedcomData) -> Element {
                     /* 00A0 = nbsp and inline block prevents underline expanding to after text */
                     h1::after {{ content: '\\00A0:'; display: inline-block; }}"
                 }
-                div { class: "max-w-200 bg-white p-5 rounded-r-lg shadow-md my-0 mx-auto",
+                div { class: "max-w-420 bg-white p-5 rounded-r-lg shadow-md my-0 mx-auto",
                     h1 { class: "pb-2.5", "Rapport d'extraction GEDCOM" }
                     div { class: "border-l-2 border-l-solid border-blue-500 bg-blue-75 rounded-r-lg p-4 mb-5",
                         p {

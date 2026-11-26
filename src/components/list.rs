@@ -1,7 +1,10 @@
 use dioxus::{prelude::*, CapturedError};
 
+use super::family::{Famille, FamilleProps};
 use super::person::{Individu, IndividuProps};
+use crate::adopt::Adoption;
 
+// Liste d'individus
 #[component]
 pub fn ListeIndividus(xrefs: Vec<String>) -> Element {
     rsx! {
@@ -23,10 +26,39 @@ pub fn ListeIndividus(xrefs: Vec<String>) -> Element {
             // Le problème est contourné en appelant le composant directement en Rust
             // et en effectuant un match sur la valeur de retour.
             for xref in xrefs {
-                li { class: "my-5 py-1.5 px-2 w-120 border-2 rounded-lg shadow-lg border-blue-200 break-inside-avoid",
+                li { class: "mt-5 break-inside-avoid",
                     match Individu(IndividuProps {
                         xref: xref.clone(),
                     }) {
+                        Ok(node) => rsx! {
+                            {node}
+                        },
+                        Err(RenderError::Error(CapturedError(error))) => rsx! {
+                            div { class: "error",
+                                div { class: "underline", "Erreur:" }
+                                for cause in error.chain() {
+                                    div { class: "ml-5", "{cause}" }
+                                }
+                            }
+                        },
+                        Err(RenderError::Suspended(_)) => {
+                            rsx! {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Liste de familles
+#[component]
+pub fn ListeFamilles(xrefs: Vec<String>) -> Element {
+    rsx! {
+        ul {
+            for xref in xrefs.iter().filter(|xref| !Adoption::is_family_virtual(xref)) {
+                li { class: "mt-5 break-inside-avoid",
+                    match Famille(FamilleProps { xref: xref.clone() }) {
                         Ok(node) => rsx! {
                             {node}
                         },

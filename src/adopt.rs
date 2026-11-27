@@ -25,7 +25,7 @@ use ged_io::types::GedcomData;
 // - récupérer leurs liens familiaux
 // - garder ceux de type enfant
 // - récupérer le champ adopted_by (Husband, Wife ou Both)
-// - la famille (virtuelle) ainsi référencée à 1 ou 2 époux adoptants
+// - la famille (virtuelle) ainsi référencée a 1 ou 2 époux adoptants
 
 // Structures de données à précalculer avant de lister les individus ou les familles.
 #[derive(Default)]

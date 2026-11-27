@@ -1,7 +1,9 @@
+use anyhow::anyhow;
 use dioxus::prelude::*;
 use ged_io::types::GedcomData;
 
 use crate::components::person::Individu;
+use crate::ERRORS;
 
 #[component]
 // Composant pour afficher une famille
@@ -11,9 +13,17 @@ pub fn Famille(xref: String) -> Element {
     let mut husband_xref = String::new();
     let mut wife_xref = String::new();
     let moved_xref = xref.clone();
-    let family = data
-        .find_family(&moved_xref)
-        .context(format!("Xref {} d'une famille non trouvé", moved_xref))?;
+    let family = if let Some(family) = data.find_family(&moved_xref) {
+        family
+    } else {
+        write_errors!(errors, {
+            errors.insert(
+                format!("Family xref {xref}"),
+                anyhow!("Famille de la liste non trouvée"),
+            );
+        });
+        return rsx! {};
+    };
 
     // Recherche du mari et de la femme
     if let Some(xref) = &family.individual1 {

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use dioxus::prelude::*;
 use ged_io::types::individual::family_link::FamilyLinkType;
 use ged_io::types::individual::gender::{Gender, GenderType};
@@ -8,6 +9,7 @@ use crate::full_name::{nom_complet, NameParts};
 use crate::notes::concat_notes;
 use crate::place::{interpreter_lieu, PlaceParts};
 use crate::Adoption;
+use crate::ERRORS;
 use crate::{FEMALE_PNG, MALE_PNG};
 
 // Composant pour afficher des notes
@@ -112,7 +114,7 @@ fn NomComplet(parts: NameParts) -> Element {
 #[component]
 fn Parent(parts: NameParts, parent: &'static str, xref: String) -> Element {
     rsx! {
-        if !parts.before_or_full.is_empty() {
+        if !parts.before_or_full.is_empty() || parts.preferred_and_rest.is_some() {
             div { class: "mb-1",
                 span { class: "italic text-gray-400", "{parent} : " }
                 a {
@@ -168,11 +170,19 @@ pub fn Individu(xref: String) -> Element {
     let mut death_place = PlaceParts::default();
     let mut death_notes = Vec::new();
     let moved_xref = xref.clone();
-    let individual = data
-        .find_individual(&moved_xref)
-        .context(format!("Xref {} d'un individu non trouvé", moved_xref))?;
+    let individual = if let Some(individual) = data.find_individual(&moved_xref) {
+        individual
+    } else {
+        write_errors!(errors, {
+            errors.insert(
+                format!("Individual xref {xref}"),
+                anyhow!("Individu de la liste non trouvée"),
+            );
+        });
+        return rsx! {};
+    };
     let notes = concat_notes(&individual.notes);
-    let full_name = nom_complet(&xref);
+    let full_name = nom_complet(&xref, &data);
     let (feminine, gender_icon) = match individual.sex.as_ref() {
         Some(Gender {
             value: GenderType::Male,
@@ -223,21 +233,27 @@ pub fn Individu(xref: String) -> Element {
     // Parents de l'individu
     let families = individual.families();
     for link in families {
-        let xref = &link.xref;
-        let family = data
-            .find_family(xref)
-            .context(format!("Xref {} d'une famille non trouvé", xref))?;
-        if link.family_link_type == FamilyLinkType::Child {
-            // Recherche du père
-            if let Some(xref) = &family.individual1 {
-                father = nom_complet(xref);
-                father_xref = xref.clone();
+        let family_xref = &link.xref;
+        if let Some(family) = data.find_family(family_xref) {
+            if link.family_link_type == FamilyLinkType::Child {
+                // Recherche du père
+                if let Some(xref) = &family.individual1 {
+                    father = nom_complet(xref, &data);
+                    father_xref = xref.clone();
+                }
+                // Recherche de la mère
+                if let Some(xref) = &family.individual2 {
+                    mother = nom_complet(xref, &data);
+                    mother_xref = xref.clone();
+                }
             }
-            // Recherche de la mère
-            if let Some(xref) = &family.individual2 {
-                mother = nom_complet(xref);
-                mother_xref = xref.clone();
-            }
+        } else {
+            write_errors!(errors, {
+                errors.insert(
+                    format!("Family xref {family_xref}"),
+                    anyhow!("Parents de {} non trouvés", full_name.before_or_full),
+                );
+            });
         }
     }
     // Age lors du décès
@@ -245,7 +261,7 @@ pub fn Individu(xref: String) -> Element {
 
     let mut adopting_parents = Vec::new();
     for xref in Adoption::adopted(&xref) {
-        let parent = nom_complet(&xref);
+        let parent = nom_complet(&xref, &data);
         adopting_parents.push((xref.clone(), parent));
     }
 

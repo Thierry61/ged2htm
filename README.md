@@ -56,3 +56,6 @@ Ceci apporte quelques contraintes :
 - les assets ne sont pas gérés par le pipeline Dioxus
 - le composant ErrorBoundary est défaillant
 - il n'y a aucune interactivité
+
+Le parseur des fichiers GED utilise le crate ged_io.
+TODO: celui-ci a été archivé il faudra donc le migrer vers oxidged

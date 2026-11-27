@@ -56,11 +56,7 @@ pub struct NameParts {
 
 // Récupération du nom et du surnom
 // (non testable en test unitaire du fait de l'absence du runtime dioxus)
-// dx check génère l'erreur : hook called outside component or hook: `use_context`
-// que j'ignore car cette fonction est indirectement appelée depuis un composant.
-pub fn names(xref: &str) -> Result<(String, Option<String>)> {
-    let data = use_context::<Store<GedcomData>>();
-    let data = data.read();
+fn names(xref: &str, data: &GedcomData) -> Result<(String, Option<String>)> {
     let individual = data
         .find_individual(xref)
         .context(format!("Xref {} d'un individu non trouvé", xref))?;
@@ -115,8 +111,8 @@ fn separe_prenom_usuel(full_name_and_nick_name: (String, Option<String>)) -> Nam
 
 // Décomposition des noms complets en séparant le prénom usuel
 // (soit faisant partie de la liste des prénoms officiels, soit un surnom à part)
-pub fn nom_complet(xref: &str) -> NameParts {
-    match names(xref) {
+pub fn nom_complet(xref: &str, data: &GedcomData) -> NameParts {
+    match names(xref, data) {
         Ok(names) => separe_prenom_usuel(names),
         Err(err) => {
             write_errors!(errors, {

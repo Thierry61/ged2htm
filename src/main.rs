@@ -144,7 +144,6 @@ struct AllArgs {
 }
 
 // Composant racine de l'application
-// TODO: pour l'instant l'application ne fait qu'afficher la liste de tous les individus
 #[component]
 fn App(args: Args, data: GedcomData) -> Element {
     // Date et heure du fichier GED

@@ -7,6 +7,7 @@ use crate::date::{age, traduire_date, Age, DateParts};
 use crate::full_name::{nom_complet, NameParts};
 use crate::notes::concat_notes;
 use crate::place::{interpreter_lieu, PlaceParts};
+use crate::Adoption;
 use crate::{FEMALE_PNG, MALE_PNG};
 
 // Composant pour afficher des notes
@@ -125,6 +126,27 @@ fn Parent(parts: NameParts, parent: &'static str, xref: String) -> Element {
 }
 
 #[component]
+fn AdoptePar(feminine: &'static str, adopting_parents: Vec<(String, NameParts)>) -> Element {
+    rsx! {
+        if !adopting_parents.is_empty() {
+            div { class: "mb-1",
+                span { class: "italic text-gray-400", "Adopté{feminine} par : " }
+                for (i , (xref , parts)) in adopting_parents.into_iter().enumerate() {
+                    if i > 0 {
+                        ", "
+                    }
+                    a {
+                        class: "hover:underline hover:decoration-dotted rounded-lg",
+                        href: "#{xref}",
+                        NomComplet { parts }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
 // Composant pour afficher un individu
 pub fn Individu(xref: String) -> Element {
     // Occupe une case vide pour le cas d'un conjoint manquant dans la liste des familles.
@@ -135,11 +157,9 @@ pub fn Individu(xref: String) -> Element {
     }
     let data = use_context::<Store<GedcomData>>();
     let data = data.read();
-    let mut father = String::new();
-    let mut father_nick = None;
+    let mut father = NameParts::default();
     let mut father_xref = String::new();
-    let mut mother = String::new();
-    let mut mother_nick = None;
+    let mut mother = NameParts::default();
     let mut mother_xref = String::new();
     let mut birth = DateParts::default();
     let mut birth_place = PlaceParts::default();
@@ -152,11 +172,7 @@ pub fn Individu(xref: String) -> Element {
         .find_individual(&moved_xref)
         .context(format!("Xref {} d'un individu non trouvé", moved_xref))?;
     let notes = concat_notes(&individual.notes);
-    let full_name = individual.full_name().context(format!(
-        "Nom complet manquant pour l'individu : {:?}",
-        individual
-    ))?;
-    let nick_name = individual.names.first().and_then(|n| n.nickname.as_deref());
+    let full_name = nom_complet(&xref);
     let (feminine, gender_icon) = match individual.sex.as_ref() {
         Some(Gender {
             value: GenderType::Male,
@@ -214,36 +230,24 @@ pub fn Individu(xref: String) -> Element {
         if link.family_link_type == FamilyLinkType::Child {
             // Recherche du père
             if let Some(xref) = &family.individual1 {
-                let individual = data
-                    .find_individual(xref)
-                    .context(format!("Xref {} d'un individu non trouvé", xref))?;
-                father = individual.full_name().context(format!(
-                    "Nom complet manquant pour l'individu : {:?}",
-                    individual
-                ))?;
-                father_nick = individual.names.first().and_then(|n| n.nickname.as_deref());
+                father = nom_complet(xref);
                 father_xref = xref.clone();
             }
             // Recherche de la mère
             if let Some(xref) = &family.individual2 {
-                let individual = data
-                    .find_individual(xref)
-                    .context(format!("Xref {} d'un individu non trouvé", xref))?;
-                mother = individual.full_name().context(format!(
-                    "Nom complet manquant pour l'individu : {:?}",
-                    individual
-                ))?;
-                mother_nick = individual.names.first().and_then(|n| n.nickname.as_deref());
+                mother = nom_complet(xref);
                 mother_xref = xref.clone();
             }
         }
     }
-    // Décomposition des noms complets en séparant le prénom usuel
-    let full_name = nom_complet((&full_name, nick_name));
-    let father = nom_complet((&father, father_nick));
-    let mother = nom_complet((&mother, mother_nick));
     // Age lors du décès
     let age = age(&birth, &death);
+
+    let mut adopting_parents = Vec::new();
+    for xref in Adoption::adopted(&xref) {
+        let parent = nom_complet(&xref);
+        adopting_parents.push((xref.clone(), parent));
+    }
 
     rsx! {
         div { id: xref,
@@ -274,6 +278,7 @@ pub fn Individu(xref: String) -> Element {
             }
             Parent { parts: father, parent: "Père", xref: father_xref }
             Parent { parts: mother, parent: "Mère", xref: mother_xref }
+            AdoptePar { feminine, adopting_parents }
         }
     }
 }

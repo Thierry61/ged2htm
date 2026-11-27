@@ -1,5 +1,7 @@
 use crate::ERRORS;
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
+use dioxus::prelude::*;
+use ged_io::types::GedcomData;
 
 // Dans Geneanet, lorsque le prénom usuel d'un individu est dans la liste
 // de ses prénoms officiels, une solution pour le désigner consiste à saisir
@@ -15,9 +17,7 @@ use anyhow::anyhow;
 // prénoms officiels.
 //
 // Pour éviter cette perte, il faut conserver la liste des prénoms officiels dans
-// le champ "Prénoms" et enregistrer séparément le prénom usuel.
-//
-// Deux contournements sont possibles :
+// le champ "Prénoms" et enregistrer séparément le prénom usuel :
 //
 // - utiliser le champ "Sobriquet" pour le seul prénom usuel. Celui-ci est exporté
 //   sous le tag NICK, ce qui permet de distinguer proprement les prénoms officiels
@@ -54,9 +54,29 @@ pub struct NameParts {
     pub nick: Option<String>,
 }
 
-pub fn nom_complet(full_name_and_nick_name: (&str, Option<&str>)) -> NameParts {
+// Récupération du nom et du surnom
+// (non testable en test unitaire du fait de l'absence du runtime dioxus)
+// dx check génère l'erreur : hook called outside component or hook: `use_context`
+// que j'ignore car cette fonction est indirectement appelée depuis un composant.
+pub fn names(xref: &str) -> Result<(String, Option<String>)> {
+    let data = use_context::<Store<GedcomData>>();
+    let data = data.read();
+    let individual = data
+        .find_individual(xref)
+        .context(format!("Xref {} d'un individu non trouvé", xref))?;
+    let full_name = individual.full_name().context(format!(
+        "Nom complet manquant pour l'individu : {:?}",
+        individual
+    ))?;
+    let nick = individual.names.first().and_then(|n| n.nickname.as_deref());
+    Ok((full_name.clone(), nick.map(|s| s.to_string())))
+}
+
+// Décomposition des noms complets en séparant le prénom usuel de la liste des prénoms officiels
+// (testable en test unitaire)
+fn separe_prenom_usuel(full_name_and_nick_name: (String, Option<String>)) -> NameParts {
     let full_name = full_name_and_nick_name.0;
-    let nick = full_name_and_nick_name.1.map(|n| n.to_string());
+    let nick = full_name_and_nick_name.1;
     let parts: Vec<&str> = full_name.split('"').collect();
     match parts.len() {
         1 => NameParts {
@@ -78,7 +98,7 @@ pub fn nom_complet(full_name_and_nick_name: (&str, Option<&str>)) -> NameParts {
             // composant NomComplet, d'où l'extraction de cette fonction hors du composant.
             write_errors!(errors, {
                 errors.insert(
-                    full_name.to_string(),
+                    full_name.clone(),
                     anyhow!("Impossible de déterminer le prénom d'usage : {full_name}"),
                 );
             });
@@ -93,6 +113,26 @@ pub fn nom_complet(full_name_and_nick_name: (&str, Option<&str>)) -> NameParts {
     }
 }
 
+// Décomposition des noms complets en séparant le prénom usuel
+// (soit faisant partie de la liste des prénoms officiels, soit un surnom à part)
+pub fn nom_complet(xref: &str) -> NameParts {
+    match names(xref) {
+        Ok(names) => separe_prenom_usuel(names),
+        Err(err) => {
+            write_errors!(errors, {
+                errors.insert(format!("Individual xref {xref}"), anyhow!(err.to_string()));
+            });
+            // Impossible de récupérer le full_name de l'individu => on retourne
+            // le xref qui sera affiché en rouge
+            NameParts {
+                error: true,
+                before_or_full: format!("Xrer {xref}"),
+                ..Default::default()
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,7 +140,7 @@ mod tests {
     // Fonction intermédiaire avec un seul argument d'entrée permettant les tests ok et err
     // (on ne teste que le cas prénom usuel inclus dans la liste des prénoms officiels)
     fn nom_complet_sans_surnom(full_name: &str) -> NameParts {
-        nom_complet((full_name, None))
+        separe_prenom_usuel((full_name.to_string(), None))
     }
 
     // Les fonctions ok et err étant similaires entre les modules testés

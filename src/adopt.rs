@@ -1,5 +1,6 @@
 use crate::ERRORS;
 use anyhow::anyhow;
+use ged_io::types::event::Event;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
@@ -19,8 +20,11 @@ use ged_io::types::GedcomData;
 // Les liens sont donc individuels (1 enfant <-> 1 parent) mais passent par des familles
 // virtuelles synthétisées dans ce seul but.
 // Avec le crate ged_io il faut :
-// - parcourir les liens familiaux de l'enfant
-// - garder ceux de type enfant et avec un champ adopted_by renseigné (Husband, Wife ou Both)
+// - parcourir les évènements de l'enfant
+// - garder ceux de type adoption
+// - récupérer leurs liens familiaux
+// - garder ceux de type enfant
+// - récupérer le champ adopted_by (Husband, Wife ou Both)
 // - la famille (virtuelle) ainsi référencée à 1 ou 2 époux adoptants
 
 // Structures de données à précalculer avant de lister les individus ou les familles.
@@ -57,7 +61,12 @@ impl Adoption {
             Ok(mut adoptions) => {
                 for individual in &data.individuals {
                     if let Some(ref individual_xref) = individual.xref {
-                        for link in &individual.families {
+                        for link in individual
+                            .events
+                            .iter()
+                            .filter(|e| e.event == Event::Adoption)
+                            .filter_map(|e| e.family_link.as_ref())
+                        {
                             if link.family_link_type == FamilyLinkType::Child {
                                 if let Some(ref by_which_parent) = link.adopted_by {
                                     let family_xref = &link.xref;
@@ -81,7 +90,8 @@ impl Adoption {
                                         adoptions
                                             .adopted
                                             .entry(individual_xref.to_string())
-                                            .and_modify(|e| e.append(&mut parents_adoptifs));
+                                            .and_modify(|e| e.append(&mut parents_adoptifs))
+                                            .or_insert(parents_adoptifs);
                                     } else {
                                         write_errors!(errors, {
                                             errors.insert(
@@ -115,6 +125,22 @@ impl Adoption {
                 false
             }
             Ok(adoptions) => adoptions.virtual_families.contains(xref),
+        };
+    }
+    // Retourne les parents adoptifs d'un enfant adopté
+    pub fn adopted(xref: &str) -> Vec<String> {
+        return match ADOPTIONS.read() {
+            Err(err) => {
+                write_errors!(errors, {
+                    errors.insert(
+                        "Adoption read locking".to_string(),
+                        anyhow!(err.to_string()),
+                    );
+                });
+                vec![]
+            }
+            // More idiomatic than: .map(|v| v.clone()).unwrap_or(vec![])
+            Ok(adoptions) => adoptions.adopted.get(xref).cloned().unwrap_or_default(),
         };
     }
 }
